@@ -3,8 +3,13 @@
   font-family: system-ui, sans-serif;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 body {
   margin: 0;
+  padding-inline: 16px;
   min-height: 100vh;
   display: grid;
   place-items: center;
@@ -14,17 +19,38 @@ body {
   color: #e5e7eb;
 }
 
-header {
+header,
+.controls,
+#player {
   display: flex;
-  gap: 16px;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
   font-size: 14px;
 }
 
 canvas {
-  width: min(92vw, 80vh);
+  width: min(92vw, 75vh);
   height: auto;
   image-rendering: pixelated;
   cursor: crosshair;
+  touch-action: none;
+}
+
+button {
+  font: inherit;
+  padding: 4px 12px;
+  border: 1px solid #374151;
+  border-radius: 6px;
+  background: #111827;
+  color: inherit;
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 
 .hint {

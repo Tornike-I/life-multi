@@ -7,11 +7,25 @@
   </head>
   <body>
     <header>
+      <span id="you"></span>
       <span id="status">connecting…</span>
       <span id="generation"></span>
     </header>
     <canvas id="board"></canvas>
-    <p class="hint">Click the board to drop a glider.</p>
+    <div class="controls">
+      <button id="join" hidden>Join the game</button>
+      <div id="player" hidden>
+        <span id="inventory"></span>
+        <span id="mat-size"></span>
+        <span id="alive"></span>
+        <button id="place" disabled>Place 0</button>
+        <button id="clear">Clear</button>
+        <button id="resize">Resize mat</button>
+      </div>
+    </div>
+    <p id="message" class="hint">
+      Select empty squares on your mat, then press Place (Enter). Esc clears.
+    </p>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
