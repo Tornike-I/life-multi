@@ -1,19 +1,134 @@
+import { createHash, randomBytes, randomInt } from "node:crypto";
 import { createServer } from "node:http";
 import { WebSocket, WebSocketServer } from "ws";
 import {
+  type ClientMessage,
+  MAX_ACCOUNTS,
   parseClientMessage,
-  randomBoard,
-  setCell,
-  step,
+  type ResultMessage,
   type ServerMessage,
+  STARTING_INVENTORY,
+  TICK_MS,
 } from "@life-multi/shared";
+import {
+  insertAccount,
+  loadGame,
+  openDatabase,
+  saveGame,
+  takeAdminActions,
+} from "./db.ts";
+import type { Account } from "./game.ts";
 
 const PORT = Number(process.env.PORT ?? 3001);
-const BOARD_SIZE = 64;
-const TICK_MS = 100;
+const SAVE_MS = 5000;
+const NO_ACCOUNT = "Join the game first.";
 
-let board = randomBoard(BOARD_SIZE, BOARD_SIZE, 0.3);
-let generation = 0;
+interface Session {
+  account: Account | null;
+  greeted: boolean;
+}
+
+const db = openDatabase();
+const game = loadGame(db, () => randomInt(2 ** 32));
+const sessions = new Map<WebSocket, Session>();
+
+function hashKey(key: string): string {
+  return createHash("sha256").update(key).digest("hex");
+}
+
+function send(socket: WebSocket, message: ServerMessage): void {
+  if (socket.readyState === WebSocket.OPEN) {
+    socket.send(JSON.stringify(message));
+  }
+}
+
+function reply(
+  socket: WebSocket,
+  action: ResultMessage["action"],
+  reason: string | null,
+): void {
+  send(
+    socket,
+    reason === null
+      ? { type: "result", action, ok: true }
+      : { type: "result", action, ok: false, reason },
+  );
+}
+
+function createAccount(): { account: Account; key: string } {
+  const key = randomBytes(32).toString("base64url");
+  const keyHash = hashKey(key);
+  const now = Date.now();
+  const account: Account = {
+    id: insertAccount(db, keyHash, now, STARTING_INVENTORY),
+    keyHash,
+    inventory: STARTING_INVENTORY,
+    smoothedLive: 0,
+    liveCells: 0,
+    home: null,
+    mat: null,
+    lastSeenAt: now,
+  };
+  game.addAccount(account);
+  return { account, key };
+}
+
+function handle(
+  socket: WebSocket,
+  session: Session,
+  message: ClientMessage,
+): void {
+  switch (message.type) {
+    case "hello": {
+      if (session.greeted) return;
+      session.greeted = true;
+      const account =
+        message.key === null
+          ? undefined
+          : game.findByKeyHash(hashKey(message.key));
+      session.account = account ?? null;
+      if (account) account.lastSeenAt = Date.now();
+      send(socket, {
+        type: "session",
+        accountId: account?.id ?? null,
+        keyRejected: message.key !== null && !account,
+      });
+      return;
+    }
+    case "join": {
+      session.greeted = true;
+      if (!session.account) {
+        if (game.accountCount() >= MAX_ACCOUNTS) {
+          reply(socket, "join", "The game is full.");
+          return;
+        }
+        const { account, key } = createAccount();
+        session.account = account;
+        send(socket, { type: "session", accountId: account.id, key });
+      }
+      reply(socket, "join", game.join(session.account));
+      return;
+    }
+    case "resize":
+      reply(
+        socket,
+        "resize",
+        session.account
+          ? game.resize(session.account, message.mat)
+          : NO_ACCOUNT,
+      );
+      return;
+    case "place":
+      if (!session.account) {
+        reply(socket, "place", NO_ACCOUNT);
+        return;
+      }
+      game.queuePlacement(session.account, message.cells, (reason) =>
+        reply(socket, "place", reason),
+      );
+      return;
+  }
+}
 
 const server = createServer((req, res) => {
   if (req.url === "/health") {
@@ -25,36 +140,65 @@ const server = createServer((req, res) => {
 
 const wss = new WebSocketServer({ server, path: "/ws" });
 
-function stateMessage(): string {
-  const message: ServerMessage = {
-    type: "state",
-    generation,
-    width: board.width,
-    height: board.height,
-    cells: Array.from(board.cells),
-  };
-  return JSON.stringify(message);
-}
-
 wss.on("connection", (socket) => {
-  socket.send(stateMessage());
-
-  socket.on("message", (data) => {
+  const session: Session = { account: null, greeted: false };
+  sessions.set(socket, session);
+  socket.on("close", () => sessions.delete(socket));
+  socket.on("message", (data, isBinary) => {
+    if (isBinary) return;
     const message = parseClientMessage(data.toString());
-    if (!message) return;
-    for (const [x, y] of message.cells) setCell(board, x, y, 1);
+    if (message) handle(socket, session, message);
   });
 });
 
-setInterval(() => {
-  board = step(board);
-  generation++;
-
-  const payload = stateMessage();
-  for (const client of wss.clients) {
-    if (client.readyState === WebSocket.OPEN) client.send(payload);
+function broadcast(): void {
+  const { board } = game;
+  const cells = Buffer.from(
+    board.cells.buffer,
+    board.cells.byteOffset,
+    board.cells.byteLength,
+  );
+  const mats = game.mats();
+  for (const [socket, session] of sessions) {
+    if (socket.readyState !== WebSocket.OPEN) continue;
+    send(socket, {
+      type: "state",
+      generation: game.generation,
+      width: board.width,
+      height: board.height,
+      mats,
+      you: session.account ? game.status(session.account) : null,
+    });
+    socket.send(cells);
   }
+}
+
+function persist(): void {
+  const now = Date.now();
+  for (const { account } of sessions.values()) {
+    if (account) account.lastSeenAt = now;
+  }
+  for (const { action, accountId } of takeAdminActions(db)) {
+    const account = game.getAccount(accountId);
+    if (action === "free" && account) game.free(account);
+  }
+  saveGame(db, game);
+}
+
+function shutdown(): void {
+  persist();
+  db.close();
+  process.exit(0);
+}
+
+persist();
+setInterval(() => {
+  game.tick();
+  broadcast();
 }, TICK_MS);
+setInterval(persist, SAVE_MS);
+process.on("SIGINT", shutdown);
+process.on("SIGTERM", shutdown);
 
 server.listen(PORT, () => {
   console.log(`life-multi server listening on http://localhost:${PORT}`);
