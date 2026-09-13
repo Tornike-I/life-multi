@@ -11,7 +11,10 @@
       <span id="status">connecting…</span>
       <span id="generation"></span>
     </header>
-    <canvas id="board"></canvas>
+    <main class="stage">
+      <canvas id="board"></canvas>
+      <canvas id="minimap" hidden></canvas>
+    </main>
     <div class="controls">
       <button id="join" hidden>Join the game</button>
       <div id="player" hidden>
@@ -21,10 +24,12 @@
         <button id="place" disabled>Place 0</button>
         <button id="clear">Clear</button>
         <button id="resize">Resize mat</button>
+        <button id="home">My mat</button>
       </div>
     </div>
     <p id="message" class="hint">
-      Select empty squares on your mat, then press Place (Enter). Esc clears.
+      Wheel to zoom, right-drag or WASD to pan. Select empty squares on your
+      mat, then press Place (Enter).
     </p>
     <script type="module" src="/src/main.ts"></script>
   </body>
