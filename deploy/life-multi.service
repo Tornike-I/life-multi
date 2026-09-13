@@ -1,0 +1,24 @@
+[Unit]
+Description=life-multi game server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=life-multi
+Group=life-multi
+WorkingDirectory=/opt/life-multi/current/apps/server
+Environment=NODE_ENV=production
+Environment=PORT=3001
+Environment=DATABASE_PATH=/var/lib/life-multi/life-multi.db
+# Node directly, not npm, so SIGTERM reaches the server and it saves the world before exiting.
+ExecStart=/usr/bin/node --experimental-strip-types --disable-warning=ExperimentalWarning src/index.ts
+Restart=always
+RestartSec=2
+StateDirectory=life-multi
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

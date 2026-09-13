@@ -59,11 +59,14 @@ Open http://localhost:5173. The Vite dev server proxies `/ws` to the game server
 
 The server saves the board and accounts to `apps/server/data/life-multi.db` every few seconds. Set `DATABASE_PATH` to use a different file, and delete the file to start a fresh world.
 
+## Hosting
+
+The public game runs on an AWS Lightsail instance behind Caddy. Setup, deploys, rollbacks and backups are in **[docs/hosting.md](docs/hosting.md)**.
+
 ## Roadmap
 
 - Rate limits on guest account creation and messages
 - Pan/zoom and compact state updates for larger boards
-- Hosting on AWS behind a custom domain
 
 ## License
 
