@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { inventoryProgress, matGrowthProgress, matSideFor } from "./rules.ts";
+import {
+  inventoryProgress,
+  LIVE_PEAK_TICKS,
+  LIVE_SMOOTHING_DECAY,
+  matGrowthProgress,
+  matSideFor,
+  recordLive,
+  smoothLive,
+} from "./rules.ts";
 
 describe("matSideFor", () => {
   it.each([
@@ -33,5 +41,40 @@ describe("inventoryProgress", () => {
   it("is full at or above the cap", () => {
     expect(inventoryProgress(12, 12)).toBe(1);
     expect(inventoryProgress(14.2, 12)).toBe(1);
+  });
+});
+
+describe("live cell smoothing", () => {
+  it("holds steady while the count oscillates within the peak window", () => {
+    const recent: number[] = [];
+    let smoothed = 0;
+    const seen = new Set<number>();
+    for (let tick = 0; tick < 200; tick++) {
+      const live = tick % 2 === 0 ? 18 : 17;
+      smoothed = smoothLive(smoothed, recordLive(recent, live));
+      seen.add(smoothed);
+    }
+    expect([...seen]).toEqual([18]);
+    expect(matSideFor(smoothed)).toBe(10);
+  });
+
+  it("keeps the peak for the whole window, then decays", () => {
+    const recent: number[] = [];
+    let smoothed = smoothLive(0, recordLive(recent, 40));
+    for (let tick = 1; tick < LIVE_PEAK_TICKS; tick++) {
+      smoothed = smoothLive(smoothed, recordLive(recent, 0));
+    }
+    expect(smoothed).toBe(40);
+
+    smoothed = smoothLive(smoothed, recordLive(recent, 0));
+    expect(smoothed).toBeCloseTo(40 * LIVE_SMOOTHING_DECAY);
+  });
+
+  it("only remembers the last LIVE_PEAK_TICKS counts", () => {
+    const recent: number[] = [];
+    for (let tick = 0; tick < LIVE_PEAK_TICKS + 5; tick++) {
+      recordLive(recent, tick);
+    }
+    expect(recent).toHaveLength(LIVE_PEAK_TICKS);
   });
 });

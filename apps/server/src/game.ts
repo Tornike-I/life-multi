@@ -7,7 +7,6 @@ import {
   findMatSpot,
   growMat,
   inventoryProgress,
-  LIVE_SMOOTHING_DECAY,
   matContains,
   matGrowthProgress,
   type MatInfo,
@@ -16,6 +15,8 @@ import {
   type PlayerStatus,
   type Point,
   type Rect,
+  recordLive,
+  smoothLive,
   squareMat,
   step,
   TICK_MS,
@@ -26,6 +27,7 @@ export interface Account {
   readonly keyHash: string;
   inventory: number;
   smoothedLive: number;
+  readonly recentLive: number[];
   liveCells: number;
   home: Point | null;
   mat: Rect | null;
@@ -186,9 +188,9 @@ export class Game {
     const accrual = TICK_MS / ACCRUAL_MS;
     for (const account of this.byId.values()) {
       account.liveCells = counts[account.id];
-      account.smoothedLive = Math.max(
-        account.liveCells,
-        account.smoothedLive * LIVE_SMOOTHING_DECAY,
+      account.smoothedLive = smoothLive(
+        account.smoothedLive,
+        recordLive(account.recentLive, account.liveCells),
       );
       const { mat, home } = account;
       if (!mat || !home) continue;

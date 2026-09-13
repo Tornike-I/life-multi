@@ -116,6 +116,7 @@ export function loadGame(db: DatabaseSync, newSeed: () => number): Game {
       lastSeenAt: row.last_seen_at,
       inventory: row.inventory,
       smoothedLive: row.smoothed_live,
+      recentLive: [],
       liveCells: row.live_cells,
       home: hasMat ? { x: row.home_x!, y: row.home_y! } : null,
       mat: hasMat

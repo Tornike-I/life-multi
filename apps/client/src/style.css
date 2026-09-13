@@ -31,6 +31,39 @@ header,
   font-size: 14px;
 }
 
+header,
+#player {
+  font-variant-numeric: tabular-nums;
+}
+
+#generation,
+#inventory,
+#mat-size,
+#alive {
+  display: inline-block;
+  text-align: left;
+}
+
+#generation {
+  min-width: 16ch;
+}
+
+#inventory {
+  min-width: 11ch;
+}
+
+#mat-size {
+  min-width: 9ch;
+}
+
+#alive {
+  min-width: 10ch;
+}
+
+#place {
+  min-width: 9ch;
+}
+
 .stage {
   position: relative;
   overflow: hidden;
