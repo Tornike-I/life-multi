@@ -67,6 +67,7 @@ const placeButton = element<HTMLButtonElement>("place");
 const clearButton = element<HTMLButtonElement>("clear");
 const homeButton = element<HTMLButtonElement>("home");
 const blueprintsButton = element<HTMLButtonElement>("blueprints-open");
+const stampCancelButton = element<HTMLButtonElement>("stamp-cancel");
 const messageEl = element("message");
 
 type Drag =
@@ -245,6 +246,7 @@ function updateHud(): void {
     ? "Can't grow: another player's mat is too close."
     : `Grows to ${mat.w + 1}×${mat.h + 1} when the ring fills.`;
   aliveEl.textContent = `alive ${you.liveCells}`;
+  stampCancelButton.hidden = stamp === null;
   placeButton.textContent = `Place ${staged.size}`;
   placeButton.disabled =
     staged.size === 0 || staged.size > you.inventory || blocked;
@@ -270,7 +272,7 @@ function stampSquares(): StampSquare[] | null {
 function stampHint(): string {
   if (!stamp) return "";
   const inventory = state?.you?.inventory ?? 0;
-  return `${stamp.name}: ${stamp.cells.length} cells (you have ${inventory}). Click to select it, R rotate, F flip, Esc to stop.`;
+  return `${stamp.name}: ${stamp.cells.length} cells (you have ${inventory}). Click to select it, R rotate, F flip, Esc or Cancel blueprint to stop.`;
 }
 
 function startStamping(blueprint: ChosenBlueprint): void {
@@ -519,6 +521,11 @@ joinButton.addEventListener("click", () => send({ type: "join" }));
 placeButton.addEventListener("click", commit);
 homeButton.addEventListener("click", centerOnMat);
 blueprintsButton.addEventListener("click", () => library.open());
+
+stampCancelButton.addEventListener("click", () => {
+  stopStamping();
+  refresh();
+});
 
 clearButton.addEventListener("click", () => {
   staged.clear();
