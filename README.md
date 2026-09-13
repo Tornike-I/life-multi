@@ -8,12 +8,15 @@ A live, always-on multiplayer take on [Conway's Game of Life](https://en.wikiped
 
 Every player has a color and a square **mat**, the only area where they can place cells. Cells are earned over time and placed in groups. The more live cells of your color are on the board, the bigger your inventory gets and the further your mat grows out from its center. Two rings under the board show the next cell being earned and the progress toward the next mat size. Once placed, cells follow Conway's rules, and newborn cells take the majority color of their parents.
 
+New players are offered a short tutorial before their account is created: a small practice board, simulated in the browser, that walks through Conway's rules, a few shapes, colors, and how live cells grow the inventory and mat. It can be replayed from the **Tutorial** button.
+
 The full rules and every formula are in **[rulebook.md](rulebook.md)**.
 
 ### Controls
 
 | Action           | Input                                                                |
 | ---------------- | -------------------------------------------------------------------- |
+| Tutorial         | Offered when you first click **Join**, or **Tutorial** at the top    |
 | Zoom             | Mouse wheel, or `+` / `-`                                            |
 | Pan              | Right or middle drag, or WASD / arrow keys                           |
 | Jump to your mat | **My mat** or `H`                                                    |
