@@ -7,17 +7,20 @@ import {
   DEAD,
   getCell,
   INVENTORY_CAP_PER_LIVE_CELL,
-  LIVE_SMOOTHING_DECAY,
+  LIVE_PEAK_TICKS,
   MAT_AREA_PER_LIVE_CELL,
   matContains,
   matSideFor,
   mod,
   type Point,
   type Rect,
+  recordLive,
   setCell,
+  smoothLive,
   squareMat,
   STARTING_INVENTORY,
   step,
+  TICK_MS,
 } from "@life-multi/shared";
 import { bounds, BUILT_IN, type Cell } from "./blueprints.ts";
 import { colorFor } from "./render.ts";
@@ -42,6 +45,7 @@ interface World {
   mat: Rect | null;
   inventory: number | null;
   smoothedLive: number;
+  recentLive: number[];
   target: Point | null;
 }
 
@@ -74,8 +78,15 @@ function emptyWorld(): World {
     mat: null,
     inventory: null,
     smoothedLive: 0,
+    recentLive: [],
     target: null,
   };
+}
+
+function liveCount(board: Board): number {
+  let live = 0;
+  for (const color of board.cells) if (color === PLAYER) live++;
+  return live;
 }
 
 function blueprint(id: string): { name: string; cells: Cell[] } {
@@ -186,7 +197,8 @@ const CHAPTERS: Chapter[] = [
     title: "Growing your territory",
     paragraphs: [
       "You can only place cells on your mat, the square around your home, and each cell you place uses one from your inventory. Placed cells can't be taken back.",
-      "The more of your cells are alive, the more cells you can hold and the bigger your mat grows. Your live cell count is smoothed: it rises right away but falls slowly, so short losses don't shrink you.",
+      "The more of your cells are alive, the more cells you can hold and the bigger your mat grows.",
+      `Your live cell count is smoothed. It uses your highest count from the last ${LIVE_PEAK_TICKS} ticks (${(LIVE_PEAK_TICKS * TICK_MS) / 1000} seconds in the real game), so a spaceship or oscillator whose cell count flickers doesn't make your mat jump. After a real loss it falls slowly. Try the lightweight spaceship: its count flickers between 9 and 12 while S holds at 12.`,
       "In the real game you earn a cell every 4 seconds. Here you start with a full inventory: keep at least 9 cells alive to grow your mat.",
     ],
     tasks: [
@@ -195,7 +207,12 @@ const CHAPTERS: Chapter[] = [
         check: (world) => (world.mat?.w ?? 0) >= 9,
       },
     ],
-    patterns: ["builtin:block", "builtin:beehive", "builtin:blinker"],
+    patterns: [
+      "builtin:block",
+      "builtin:beehive",
+      "builtin:blinker",
+      "builtin:lwss",
+    ],
     playing: true,
     editable: true,
     simulationControls: true,
@@ -338,7 +355,10 @@ export function createTutorial(options: {
       const { matArea, inventoryCap } = allowanceFor(live);
       const side = matSideFor(live);
       statsEl.replaceChildren(
-        paragraph(`Your live cells, smoothed: S = ${live.toFixed(1)}`, "div"),
+        paragraph(
+          `Live cells now: ${liveCount(world.board)}, smoothed: S = ${live.toFixed(1)}`,
+          "div",
+        ),
         paragraph(
           `Inventory limit = ${BASE_INVENTORY_CAP} + ${INVENTORY_CAP_PER_LIVE_CELL} × S = ${inventoryCap}`,
           "div",
@@ -360,11 +380,9 @@ export function createTutorial(options: {
     world.generation++;
     world.steps++;
     if (world.mat) {
-      let live = 0;
-      for (const color of world.board.cells) if (color === PLAYER) live++;
-      world.smoothedLive = Math.max(
-        live,
-        world.smoothedLive * LIVE_SMOOTHING_DECAY,
+      world.smoothedLive = smoothLive(
+        world.smoothedLive,
+        recordLive(world.recentLive, liveCount(world.board)),
       );
       const side = Math.min(matSideFor(world.smoothedLive), TUTORIAL_SIZE);
       world.mat = squareMat(HOME, side, TUTORIAL_SIZE, TUTORIAL_SIZE);
