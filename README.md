@@ -22,6 +22,8 @@ The full rules and every formula are in **[rulebook.md](rulebook.md)**.
 | Place selection  | **Place** or Enter                                                   |
 | Clear selection  | **Clear** or Esc                                                     |
 | Resize mat       | **Resize mat**, then drag a rectangle that contains your home square |
+| Blueprints       | **Blueprints** opens the library and editor; **Use** one to stamp it |
+| Stamp            | Click to select its squares, `R` rotate, `F` flip, Esc to stop       |
 
 ## Stack
 

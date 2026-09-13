@@ -9,6 +9,7 @@ import {
   type StateMessage,
   validateMat,
 } from "@life-multi/shared";
+import { bounds, type Cell, flip, rotate } from "./blueprints.ts";
 import {
   type Camera,
   clampZoom,
@@ -19,8 +20,9 @@ import {
   type Viewport,
   zoomAt,
 } from "./camera.ts";
+import { type ChosenBlueprint, createLibrary } from "./library.ts";
 import { drawMinimap, type MinimapLayout } from "./minimap.ts";
-import { colorFor, draw } from "./render.ts";
+import { colorFor, draw, type StampSquare } from "./render.ts";
 import "./style.css";
 
 const KEY_STORAGE = "life-multi:key";
@@ -64,6 +66,7 @@ const placeButton = element<HTMLButtonElement>("place");
 const clearButton = element<HTMLButtonElement>("clear");
 const resizeButton = element<HTMLButtonElement>("resize");
 const homeButton = element<HTMLButtonElement>("home");
+const blueprintsButton = element<HTMLButtonElement>("blueprints-open");
 const messageEl = element("message");
 
 type Drag =
@@ -85,6 +88,13 @@ let camera: Camera | null = null;
 let followMat = true;
 let minimapLayout: MinimapLayout | null = null;
 let renderQueued = false;
+let stamp: ChosenBlueprint | null = null;
+let hover: Point | null = null;
+
+const library = createLibrary(
+  () => (accountId === null ? "#e5e7eb" : colorFor(accountId)),
+  startStamping,
+);
 
 function loadKey(): string | null {
   try {
@@ -155,6 +165,7 @@ function handle(message: ServerMessage): void {
       }
       if (!message.you?.mat) {
         followMat = true;
+        stopStamping();
       } else if (followMat) {
         followMat = false;
         centerOnMat();
@@ -254,6 +265,66 @@ function rectBetween(a: Point, b: Point): Rect {
   };
 }
 
+function stampSquares(): StampSquare[] | null {
+  if (!stamp || !hover || !state || !cells) return null;
+  const board = state;
+  const current = cells;
+  const mat = board.you?.mat;
+  const { w, h } = bounds(stamp.cells);
+  const originX = hover.x - Math.floor(w / 2);
+  const originY = hover.y - Math.floor(h / 2);
+  return stamp.cells.map(([dx, dy]) => {
+    const x = originX + dx;
+    const y = originY + dy;
+    const square = boardSquare({ x, y }, board);
+    const index = square.y * board.width + square.x;
+    const ok =
+      mat !== undefined &&
+      mat !== null &&
+      rectContains(mat, square) &&
+      current[index] === DEAD;
+    return { x, y, index, ok };
+  });
+}
+
+function stampHint(): string {
+  if (!stamp) return "";
+  const inventory = state?.you?.inventory ?? 0;
+  return `${stamp.name}: ${stamp.cells.length} cells (you have ${inventory}). Click to select it, R rotate, F flip, Esc to stop.`;
+}
+
+function startStamping(blueprint: ChosenBlueprint): void {
+  stamp = blueprint;
+  resizing = false;
+  messageEl.textContent = stampHint();
+  refresh();
+}
+
+function stopStamping(): void {
+  if (!stamp) return;
+  stamp = null;
+  hover = null;
+  messageEl.textContent = "";
+}
+
+function transformStamp(change: (cells: readonly Cell[]) => Cell[]): void {
+  if (!stamp) return;
+  stamp = { ...stamp, cells: change(stamp.cells) };
+  scheduleRender();
+}
+
+function stampHere(): void {
+  const squares = stampSquares();
+  if (!squares) return;
+  if (!squares.every((square) => square.ok)) {
+    messageEl.textContent = `${stamp!.name} has to fit on empty squares of your mat.`;
+    return;
+  }
+  for (const { index } of squares) staged.add(index);
+  messageEl.textContent = `Selected ${stamp!.name}. Press Place, or click to select another.`;
+  refresh();
+}
+
 function scheduleRender(): void {
   if (renderQueued) return;
   renderQueued = true;
@@ -281,6 +352,7 @@ function render(): void {
       rect,
       valid: resizeProblem(toBoardRect(rect, board)) === null,
     },
+    stampPreview: stampSquares(),
   });
 
   if (accountId === null) {
@@ -305,6 +377,15 @@ function render(): void {
 function refresh(): void {
   scheduleRender();
   updateHud();
+}
+
+function measureViewport(): void {
+  const dpr = window.devicePixelRatio || 1;
+  viewport = { width: canvas.clientWidth, height: canvas.clientHeight };
+  canvas.width = Math.max(1, Math.round(viewport.width * dpr));
+  canvas.height = Math.max(1, Math.round(viewport.height * dpr));
+  if (camera) camera = { ...camera, zoom: clampZoom(camera.zoom, viewport) };
+  scheduleRender();
 }
 
 function worldSquareAt(event: MouseEvent): Point | null {
@@ -375,6 +456,12 @@ canvas.addEventListener("pointerdown", (event) => {
   const world = worldSquareAt(event);
   if (!state || !mat || !world || event.button !== 0) return;
 
+  if (stamp) {
+    hover = world;
+    stampHere();
+    return;
+  }
+
   if (resizing) {
     drag = { kind: "resize", from: world, to: world };
   } else {
@@ -391,6 +478,10 @@ canvas.addEventListener("pointerdown", (event) => {
 });
 
 canvas.addEventListener("pointermove", (event) => {
+  if (stamp) {
+    hover = worldSquareAt(event);
+    scheduleRender();
+  }
   if (!drag) return;
   if (drag.kind === "pan") {
     if (camera) {
@@ -411,6 +502,12 @@ canvas.addEventListener("pointermove", (event) => {
   if (drag.kind === "resize") drag.to = world;
   else paint(boardSquare(world, state));
   refresh();
+});
+
+canvas.addEventListener("pointerleave", () => {
+  if (!stamp) return;
+  hover = null;
+  scheduleRender();
 });
 
 canvas.addEventListener("pointerup", () => {
@@ -472,6 +569,7 @@ minimap.addEventListener("pointermove", (event) => {
 joinButton.addEventListener("click", () => send({ type: "join" }));
 placeButton.addEventListener("click", commit);
 homeButton.addEventListener("click", centerOnMat);
+blueprintsButton.addEventListener("click", () => library.open());
 
 clearButton.addEventListener("click", () => {
   staged.clear();
@@ -479,6 +577,7 @@ clearButton.addEventListener("click", () => {
 });
 
 resizeButton.addEventListener("click", () => {
+  stopStamping();
   resizing = !resizing;
   messageEl.textContent = resizing
     ? "Drag a rectangle that contains your home square."
@@ -487,14 +586,20 @@ resizeButton.addEventListener("click", () => {
 });
 
 window.addEventListener("keydown", (event) => {
+  if (library.dialog.open) return;
   const key = event.key.toLowerCase();
   if (key === "enter") {
     commit();
   } else if (key === "escape") {
-    staged.clear();
+    if (stamp) stopStamping();
+    else staged.clear();
     resizing = false;
     drag = null;
     refresh();
+  } else if (key === "r" && stamp) {
+    transformStamp(rotate);
+  } else if (key === "f" && stamp) {
+    transformStamp(flip);
   } else if (key === "h") {
     centerOnMat();
   } else if (camera && (key === "+" || key === "=" || key === "-")) {

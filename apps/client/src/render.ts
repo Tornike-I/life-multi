@@ -7,12 +7,20 @@ const CONFLICT = "#ef4444";
 const GRID_MIN_ZOOM = 6;
 const CELL_GAP_MIN_ZOOM = 5;
 
+export interface StampSquare {
+  x: number;
+  y: number;
+  index: number;
+  ok: boolean;
+}
+
 export interface View {
   state: StateMessage;
   cells: Uint16Array;
   accountId: number | null;
   staged: ReadonlySet<number>;
   resizePreview: { rect: Rect; valid: boolean } | null;
+  stampPreview: StampSquare[] | null;
   camera: Camera;
   width: number;
   height: number;
@@ -147,6 +155,13 @@ export function draw(ctx: CanvasRenderingContext2D, view: View): void {
           outlineSquare(x, y, pixel);
         }
       }
+    }
+  }
+
+  if (view.stampPreview && accountId !== null) {
+    for (const { x, y, ok } of view.stampPreview) {
+      ctx.fillStyle = ok ? colorFor(accountId, 0.45) : "rgb(239 68 68 / 0.55)";
+      ctx.fillRect(x + inset, y + inset, cellSize, cellSize);
     }
   }
 
