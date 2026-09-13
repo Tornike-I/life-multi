@@ -109,15 +109,6 @@ function handle(
       reply(socket, "join", game.join(session.account));
       return;
     }
-    case "resize":
-      reply(
-        socket,
-        "resize",
-        session.account
-          ? game.resize(session.account, message.mat)
-          : NO_ACCOUNT,
-      );
-      return;
     case "place":
       if (!session.account) {
         reply(socket, "place", NO_ACCOUNT);

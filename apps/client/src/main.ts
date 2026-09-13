@@ -1,13 +1,11 @@
 import {
   type ClientMessage,
   DEAD,
+  matContains,
   type Point,
-  type Rect,
-  rectContains,
   type ResultMessage,
   type ServerMessage,
   type StateMessage,
-  validateMat,
 } from "@life-multi/shared";
 import { bounds, type Cell, flip, rotate } from "./blueprints.ts";
 import {
@@ -43,7 +41,6 @@ const PAN_KEYS: Record<string, [number, number]> = {
 const SUCCESS_TEXT: Record<ResultMessage["action"], string> = {
   join: "You have a mat. Select empty squares on it, then press Place.",
   place: "Placed.",
-  resize: "Mat resized.",
 };
 
 function element<T extends HTMLElement = HTMLElement>(id: string): T {
@@ -60,18 +57,20 @@ const generationEl = element("generation");
 const joinButton = element<HTMLButtonElement>("join");
 const playerEl = element("player");
 const inventoryEl = element("inventory");
+const inventoryRing =
+  document.querySelector<SVGCircleElement>("#inventory-ring")!;
+const matStatEl = element("mat-stat");
 const matSizeEl = element("mat-size");
+const matRing = document.querySelector<SVGCircleElement>("#mat-ring")!;
 const aliveEl = element("alive");
 const placeButton = element<HTMLButtonElement>("place");
 const clearButton = element<HTMLButtonElement>("clear");
-const resizeButton = element<HTMLButtonElement>("resize");
 const homeButton = element<HTMLButtonElement>("home");
 const blueprintsButton = element<HTMLButtonElement>("blueprints-open");
 const messageEl = element("message");
 
 type Drag =
   | { kind: "paint"; add: boolean }
-  | { kind: "resize"; from: Point; to: Point }
   | { kind: "pan"; lastX: number; lastY: number };
 
 let socket: WebSocket;
@@ -81,7 +80,6 @@ let state: StateMessage | null = null;
 let cells: Uint16Array | null = null;
 let staged = new Set<number>();
 let lastCommit = new Set<number>();
-let resizing = false;
 let drag: Drag | null = null;
 let viewport: Viewport = { width: 1, height: 1 };
 let camera: Camera | null = null;
@@ -197,15 +195,27 @@ function centerOnMat(): void {
   scheduleRender();
 }
 
-function pruneStaged(): void {
+function onOwnMat(square: Point): boolean {
   const mat = state?.you?.mat;
+  return (
+    state !== null &&
+    mat !== null &&
+    mat !== undefined &&
+    matContains(mat, square, state.width, state.height)
+  );
+}
+
+function pruneStaged(): void {
+  if (!state) return;
+  const { width } = state;
   for (const index of staged) {
-    const square = state && {
-      x: index % state.width,
-      y: Math.floor(index / state.width),
-    };
-    if (!mat || !square || !rectContains(mat, square)) staged.delete(index);
+    const square = { x: index % width, y: Math.floor(index / width) };
+    if (!onOwnMat(square)) staged.delete(index);
   }
+}
+
+function setRing(ring: SVGCircleElement, progress: number): void {
+  ring.style.strokeDashoffset = String(1 - progress);
 }
 
 function updateHud(): void {
@@ -225,51 +235,25 @@ function updateHud(): void {
   const board = cells;
   const blocked =
     board !== null && [...staged].some((index) => board[index] !== DEAD);
+  playerEl.style.setProperty("--player", colorFor(you.id));
   inventoryEl.textContent = `cells ${you.inventory}/${you.inventoryCap}`;
-  matSizeEl.textContent = `mat ${mat.w * mat.h}/${you.matArea}`;
+  setRing(inventoryRing, you.inventoryProgress);
+  matSizeEl.textContent = `mat ${mat.w}×${mat.h}`;
+  setRing(matRing, you.matProgress);
+  matStatEl.classList.toggle("blocked", you.matBlocked);
+  matStatEl.title = you.matBlocked
+    ? "Can't grow: another player's mat is too close."
+    : `Grows to ${mat.w + 1}×${mat.h + 1} when the ring fills.`;
   aliveEl.textContent = `alive ${you.liveCells}`;
   placeButton.textContent = `Place ${staged.size}`;
   placeButton.disabled =
     staged.size === 0 || staged.size > you.inventory || blocked;
-  resizeButton.textContent = resizing ? "Cancel resize" : "Resize mat";
-}
-
-function toBoardRect(rect: Rect, board: StateMessage): Rect {
-  return {
-    x: mod(rect.x, board.width),
-    y: mod(rect.y, board.height),
-    w: rect.w,
-    h: rect.h,
-  };
-}
-
-function resizeProblem(rect: Rect): string | null {
-  const home = state?.you?.home;
-  if (!state || !home) return "You don't have a mat yet.";
-  return validateMat(
-    rect,
-    home,
-    state.you!.matArea,
-    state.mats.filter((mat) => mat.id !== accountId),
-    state.width,
-    state.height,
-  );
-}
-
-function rectBetween(a: Point, b: Point): Rect {
-  return {
-    x: Math.min(a.x, b.x),
-    y: Math.min(a.y, b.y),
-    w: Math.abs(a.x - b.x) + 1,
-    h: Math.abs(a.y - b.y) + 1,
-  };
 }
 
 function stampSquares(): StampSquare[] | null {
   if (!stamp || !hover || !state || !cells) return null;
   const board = state;
   const current = cells;
-  const mat = board.you?.mat;
   const { w, h } = bounds(stamp.cells);
   const originX = hover.x - Math.floor(w / 2);
   const originY = hover.y - Math.floor(h / 2);
@@ -278,11 +262,7 @@ function stampSquares(): StampSquare[] | null {
     const y = originY + dy;
     const square = boardSquare({ x, y }, board);
     const index = square.y * board.width + square.x;
-    const ok =
-      mat !== undefined &&
-      mat !== null &&
-      rectContains(mat, square) &&
-      current[index] === DEAD;
+    const ok = onOwnMat(square) && current[index] === DEAD;
     return { x, y, index, ok };
   });
 }
@@ -295,7 +275,6 @@ function stampHint(): string {
 
 function startStamping(blueprint: ChosenBlueprint): void {
   stamp = blueprint;
-  resizing = false;
   messageEl.textContent = stampHint();
   refresh();
 }
@@ -336,9 +315,7 @@ function scheduleRender(): void {
 
 function render(): void {
   if (!state || !cells || !camera) return;
-  const board = state;
   const dpr = window.devicePixelRatio || 1;
-  const rect = drag?.kind === "resize" ? rectBetween(drag.from, drag.to) : null;
   draw(ctx, {
     state,
     cells,
@@ -348,10 +325,6 @@ function render(): void {
     dpr,
     width: viewport.width,
     height: viewport.height,
-    resizePreview: rect && {
-      rect,
-      valid: resizeProblem(toBoardRect(rect, board)) === null,
-    },
     stampPreview: stampSquares(),
   });
 
@@ -405,9 +378,7 @@ function boardSquare(world: Point, board: StateMessage): Point {
 }
 
 function paint(square: Point): void {
-  const mat = state?.you?.mat;
-  if (!state || !mat || drag?.kind !== "paint") return;
-  if (!rectContains(mat, square)) return;
+  if (!state || drag?.kind !== "paint" || !onOwnMat(square)) return;
   const index = square.y * state.width + square.x;
   if (drag.add) staged.add(index);
   else staged.delete(index);
@@ -443,9 +414,8 @@ canvas.addEventListener("pointerdown", (event) => {
     return;
   }
 
-  const mat = state?.you?.mat;
   const world = worldSquareAt(event);
-  if (!state || !mat || !world || event.button !== 0) return;
+  if (!state || !state.you?.mat || !world || event.button !== 0) return;
 
   if (stamp) {
     hover = world;
@@ -453,17 +423,13 @@ canvas.addEventListener("pointerdown", (event) => {
     return;
   }
 
-  if (resizing) {
-    drag = { kind: "resize", from: world, to: world };
-  } else {
-    const square = boardSquare(world, state);
-    if (!rectContains(mat, square)) return;
-    drag = {
-      kind: "paint",
-      add: !staged.has(square.y * state.width + square.x),
-    };
-    paint(square);
-  }
+  const square = boardSquare(world, state);
+  if (!onOwnMat(square)) return;
+  drag = {
+    kind: "paint",
+    add: !staged.has(square.y * state.width + square.x),
+  };
+  paint(square);
   canvas.setPointerCapture(event.pointerId);
   refresh();
 });
@@ -490,8 +456,7 @@ canvas.addEventListener("pointermove", (event) => {
 
   const world = worldSquareAt(event);
   if (!world || !state) return;
-  if (drag.kind === "resize") drag.to = world;
-  else paint(boardSquare(world, state));
+  paint(boardSquare(world, state));
   refresh();
 });
 
@@ -502,13 +467,6 @@ canvas.addEventListener("pointerleave", () => {
 });
 
 canvas.addEventListener("pointerup", () => {
-  if (drag?.kind === "resize" && state) {
-    const rect = toBoardRect(rectBetween(drag.from, drag.to), state);
-    const problem = resizeProblem(rect);
-    if (problem) messageEl.textContent = problem;
-    else send({ type: "resize", mat: rect });
-    resizing = false;
-  }
   drag = null;
   refresh();
 });
@@ -567,15 +525,6 @@ clearButton.addEventListener("click", () => {
   refresh();
 });
 
-resizeButton.addEventListener("click", () => {
-  stopStamping();
-  resizing = !resizing;
-  messageEl.textContent = resizing
-    ? "Drag a rectangle that contains your home square."
-    : "";
-  refresh();
-});
-
 window.addEventListener("keydown", (event) => {
   if (library.dialog.open) return;
   const key = event.key.toLowerCase();
@@ -584,7 +533,6 @@ window.addEventListener("keydown", (event) => {
   } else if (key === "escape") {
     if (stamp) stopStamping();
     else staged.clear();
-    resizing = false;
     drag = null;
     refresh();
   } else if (key === "r" && stamp) {

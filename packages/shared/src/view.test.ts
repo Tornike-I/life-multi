@@ -46,6 +46,18 @@ describe("ownExtent", () => {
     );
   });
 
+  it("covers a mat that wraps across the board edge", () => {
+    const mat = { x: 250, y: 10, w: 8, h: 8 };
+    expect(ownExtent(new Uint16Array(size * size), size, size, 1, mat)).toEqual(
+      {
+        x: 222,
+        y: -18,
+        w: 64,
+        h: 64,
+      },
+    );
+  });
+
   it("follows the player's cells across the wrapped edge and ignores other colors", () => {
     const cells = new Uint16Array(size * size);
     cells[10 * size + 250] = 1;

@@ -64,8 +64,8 @@ export function ownExtent(
     rows[Math.floor(i / width)] = 1;
   }
   if (mat) {
-    columns.fill(1, mat.x, mat.x + mat.w);
-    rows.fill(1, mat.y, mat.y + mat.h);
+    for (let i = 0; i < mat.w; i++) columns[(mat.x + i) % width] = 1;
+    for (let j = 0; j < mat.h; j++) rows[(mat.y + j) % height] = 1;
   }
 
   const columnSpan = ringSpan(columns, width);

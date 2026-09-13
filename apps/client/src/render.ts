@@ -19,7 +19,6 @@ export interface View {
   cells: Uint16Array;
   accountId: number | null;
   staged: ReadonlySet<number>;
-  resizePreview: { rect: Rect; valid: boolean } | null;
   stampPreview: StampSquare[] | null;
   camera: Camera;
   width: number;
@@ -65,7 +64,7 @@ function strokeGrid(ctx: CanvasRenderingContext2D, rect: Rect): void {
 }
 
 export function draw(ctx: CanvasRenderingContext2D, view: View): void {
-  const { state, cells, accountId, staged, resizePreview, camera, dpr } = view;
+  const { state, cells, accountId, staged, camera, dpr } = view;
   const { width, height } = state;
   const { zoom } = camera;
   const left = camera.x - view.width / 2 / zoom;
@@ -163,14 +162,5 @@ export function draw(ctx: CanvasRenderingContext2D, view: View): void {
       ctx.fillStyle = ok ? colorFor(accountId, 0.45) : "rgb(239 68 68 / 0.55)";
       ctx.fillRect(x + inset, y + inset, cellSize, cellSize);
     }
-  }
-
-  if (resizePreview) {
-    const { rect, valid } = resizePreview;
-    ctx.setLineDash([6 * pixel, 4 * pixel]);
-    ctx.strokeStyle = valid ? "#e5e7eb" : CONFLICT;
-    ctx.lineWidth = 2 * pixel;
-    ctx.strokeRect(rect.x, rect.y, rect.w, rect.h);
-    ctx.setLineDash([]);
   }
 }

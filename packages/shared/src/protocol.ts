@@ -11,7 +11,9 @@ export interface PlayerStatus {
   id: number;
   inventory: number;
   inventoryCap: number;
-  matArea: number;
+  inventoryProgress: number;
+  matProgress: number;
+  matBlocked: boolean;
   liveCells: number;
   home: Point | null;
   mat: Rect | null;
@@ -36,7 +38,7 @@ export interface StateMessage {
 
 export interface ResultMessage {
   type: "result";
-  action: "join" | "place" | "resize";
+  action: "join" | "place";
   ok: boolean;
   reason?: string;
 }
@@ -57,13 +59,7 @@ export interface PlaceMessage {
   cells: [x: number, y: number][];
 }
 
-export interface ResizeMessage {
-  type: "resize";
-  mat: Rect;
-}
-
-export type ClientMessage =
-  HelloMessage | JoinMessage | PlaceMessage | ResizeMessage;
+export type ClientMessage = HelloMessage | JoinMessage | PlaceMessage;
 
 export function parseClientMessage(raw: string): ClientMessage | null {
   let data: unknown;
@@ -82,8 +78,6 @@ export function parseClientMessage(raw: string): ClientMessage | null {
       return { type: "join" };
     case "place":
       return parsePlace(message.cells);
-    case "resize":
-      return parseResize(message.mat);
     default:
       return null;
   }
@@ -107,19 +101,4 @@ function parsePlace(cells: unknown): PlaceMessage | null {
       Number.isInteger(cell[1]),
   );
   return valid ? { type: "place", cells } : null;
-}
-
-function parseResize(mat: unknown): ResizeMessage | null {
-  if (typeof mat !== "object" || mat === null) return null;
-  const { x, y, w, h } = mat as Record<string, unknown>;
-  if (
-    typeof x !== "number" ||
-    typeof y !== "number" ||
-    typeof w !== "number" ||
-    typeof h !== "number" ||
-    ![x, y, w, h].every(Number.isInteger)
-  ) {
-    return null;
-  }
-  return { type: "resize", mat: { x, y, w, h } };
 }

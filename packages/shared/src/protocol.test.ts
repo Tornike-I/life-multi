@@ -20,10 +20,6 @@ describe("parseClientMessage", () => {
         ],
       },
     ],
-    [
-      '{"type":"resize","mat":{"x":1,"y":2,"w":10,"h":8}}',
-      { type: "resize", mat: { x: 1, y: 2, w: 10, h: 8 } },
-    ],
   ])("accepts %s", (raw, expected) => {
     expect(parseClientMessage(raw)).toEqual(expected);
   });
@@ -37,8 +33,7 @@ describe("parseClientMessage", () => {
     '{"type":"place","cells":"nope"}',
     '{"type":"place","cells":[[1]]}',
     '{"type":"place","cells":[[1.5,2]]}',
-    '{"type":"resize","mat":{"x":1,"y":2,"w":10}}',
-    '{"type":"resize","mat":{"x":1,"y":2,"w":10,"h":"8"}}',
+    '{"type":"resize","mat":{"x":1,"y":2,"w":10,"h":8}}',
   ])("rejects %s", (raw) => {
     expect(parseClientMessage(raw)).toBeNull();
   });

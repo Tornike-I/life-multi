@@ -18,12 +18,40 @@
     <div class="controls">
       <button id="join" hidden>Join the game</button>
       <div id="player" hidden>
-        <span id="inventory"></span>
-        <span id="mat-size"></span>
+        <span
+          class="stat"
+          title="Cells ready to place. The ring fills as the next one is earned."
+        >
+          <svg class="ring" viewBox="0 0 20 20" aria-hidden="true">
+            <circle class="ring-track" cx="10" cy="10" r="8" />
+            <circle
+              id="inventory-ring"
+              class="ring-fill"
+              cx="10"
+              cy="10"
+              r="8"
+              pathLength="1"
+            />
+          </svg>
+          <span id="inventory"></span>
+        </span>
+        <span id="mat-stat" class="stat">
+          <svg class="ring" viewBox="0 0 20 20" aria-hidden="true">
+            <circle class="ring-track" cx="10" cy="10" r="8" />
+            <circle
+              id="mat-ring"
+              class="ring-fill"
+              cx="10"
+              cy="10"
+              r="8"
+              pathLength="1"
+            />
+          </svg>
+          <span id="mat-size"></span>
+        </span>
         <span id="alive"></span>
         <button id="place" disabled>Place 0</button>
         <button id="clear">Clear</button>
-        <button id="resize">Resize mat</button>
         <button id="blueprints-open">Blueprints</button>
         <button id="home">My mat</button>
       </div>
