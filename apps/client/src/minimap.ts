@@ -1,7 +1,11 @@
 import {
   DEAD,
-  ownExtent,
+  extentFromLines,
+  type Lines,
+  mergeLines,
+  ownLines,
   type Rect,
+  recordLines,
   type StateMessage,
 } from "@life-multi/shared";
 import { type Camera, mod, type Viewport } from "./camera.ts";
@@ -22,8 +26,27 @@ export interface MinimapView {
   viewport: Viewport;
 }
 
+const history: Lines[] = [];
+let recordedCells: Uint16Array | null = null;
+let recordedAccount: number | null = null;
+
 function nearestCopy(value: number, target: number, size: number): number {
   return value + size * Math.round((target - value) / size);
+}
+
+function remember(view: MinimapView): void {
+  const { state, cells, accountId } = view;
+  if (accountId !== recordedAccount) {
+    history.length = 0;
+    recordedAccount = accountId;
+  }
+  if (cells === recordedCells) return;
+  recordedCells = cells;
+  const mat = state.you?.mat ?? null;
+  recordLines(
+    history,
+    ownLines(cells, state.width, state.height, accountId, mat),
+  );
 }
 
 export function drawMinimap(
@@ -35,7 +58,9 @@ export function drawMinimap(
   const { state, cells, accountId, camera, viewport } = view;
   const { width, height } = state;
   const mat = state.you?.mat ?? null;
-  const extent = ownExtent(cells, width, height, accountId, mat);
+  remember(view);
+  const merged = mergeLines(history);
+  const extent = merged && extentFromLines(merged);
   if (!extent) return null;
 
   const scale = Math.min(sizePx / extent.w, sizePx / extent.h);

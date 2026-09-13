@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { ownExtent, ringSpan } from "./view.ts";
+import { MINIMAP_HISTORY_TICKS } from "./rules.ts";
+import {
+  extentFromLines,
+  type Lines,
+  mergeLines,
+  ownExtent,
+  ownLines,
+  recordLines,
+  ringSpan,
+} from "./view.ts";
 
 describe("ringSpan", () => {
   it("is null when nothing is occupied", () => {
@@ -27,41 +36,42 @@ describe("ringSpan", () => {
 
 describe("ownExtent", () => {
   const size = 256;
-  const cornerMat = { x: 0, y: 0, w: 8, h: 8 };
 
-  function cellsAt(...squares: [number, number, number?][]): Uint16Array {
-    const cells = new Uint16Array(size * size);
-    for (const [x, y, color = 1] of squares) cells[y * size + x] = color;
-    return cells;
-  }
-
-  it("is null for a player without a mat, even with cells", () => {
-    expect(ownExtent(cellsAt([10, 10]), size, size, 1, null)).toBeNull();
+  it("is null for a player with no mat and no cells", () => {
+    expect(
+      ownExtent(new Uint16Array(size * size), size, size, 1, null),
+    ).toBeNull();
   });
 
   it("pads a lone mat up to the minimum minimap size", () => {
     const mat = { x: 100, y: 40, w: 8, h: 8 };
-    expect(ownExtent(cellsAt(), size, size, 1, mat)).toEqual({
-      x: 72,
-      y: 12,
-      w: 64,
-      h: 64,
-    });
+    expect(ownExtent(new Uint16Array(size * size), size, size, 1, mat)).toEqual(
+      {
+        x: 72,
+        y: 12,
+        w: 64,
+        h: 64,
+      },
+    );
   });
 
   it("covers a mat that wraps across the board edge", () => {
     const mat = { x: 250, y: 10, w: 8, h: 8 };
-    expect(ownExtent(cellsAt(), size, size, 1, mat)).toEqual({
-      x: 222,
-      y: -18,
-      w: 64,
-      h: 64,
-    });
+    expect(ownExtent(new Uint16Array(size * size), size, size, 1, mat)).toEqual(
+      {
+        x: 222,
+        y: -18,
+        w: 64,
+        h: 64,
+      },
+    );
   });
 
-  it("follows the player's nearby cells across the wrapped edge and ignores other colors", () => {
+  it("follows the player's cells across the wrapped edge and ignores other colors", () => {
+    const cells = new Uint16Array(size * size);
+    cells[10 * size + 250] = 1;
+    cells[10 * size + 100] = 2;
     const mat = { x: 2, y: 10, w: 8, h: 8 };
-    const cells = cellsAt([250, 10], [100, 10, 2]);
     expect(ownExtent(cells, size, size, 1, mat)).toEqual({
       x: 226,
       y: -18,
@@ -70,36 +80,54 @@ describe("ownExtent", () => {
     });
   });
 
-  it("grows beyond the minimum as nearby cells spread", () => {
-    expect(ownExtent(cellsAt([60, 5]), size, size, 1, cornerMat)).toEqual({
+  it("grows beyond the minimum as the player's cells spread", () => {
+    const cells = new Uint16Array(size * size);
+    cells[5 * size + 0] = 1;
+    cells[5 * size + 100] = 1;
+    expect(ownExtent(cells, size, size, 1, null)).toEqual({
       x: -16,
-      y: -28,
-      w: 93,
+      y: -27,
+      w: 133,
       h: 64,
     });
   });
+});
 
-  it("counts cells up to the range from the mat and ignores farther ones", () => {
-    expect(ownExtent(cellsAt([71, 4]), size, size, 1, cornerMat)).toEqual({
-      x: -16,
-      y: -28,
-      w: 104,
-      h: 64,
-    });
-    expect(ownExtent(cellsAt([72, 4]), size, size, 1, cornerMat)).toEqual({
-      x: -28,
-      y: -28,
-      w: 64,
-      h: 64,
-    });
+describe("minimap history", () => {
+  const size = 256;
+  const mat = { x: 100, y: 100, w: 8, h: 8 };
+  const withEdgeCell = { x: 84, y: 72, w: 113, h: 64 };
+  const matOnly = { x: 72, y: 72, w: 64, h: 64 };
+
+  function frame(cell: [number, number] | null): Lines {
+    const cells = new Uint16Array(size * size);
+    if (cell) cells[cell[1] * size + cell[0]] = 1;
+    return ownLines(cells, size, size, 1, mat);
+  }
+
+  it("has no area before any frame is recorded", () => {
+    expect(mergeLines([])).toBeNull();
   });
 
-  it("measures the range around the wrapped board edge", () => {
-    expect(ownExtent(cellsAt([192, 4]), size, size, 1, cornerMat)).toEqual({
-      x: 176,
-      y: -28,
-      w: 104,
-      h: 64,
-    });
+  it("keeps the area steady while a cell at its edge blinks", () => {
+    const history: Lines[] = [];
+    const extents = new Set<string>();
+    for (let tick = 0; tick < 40; tick++) {
+      recordLines(history, frame(tick % 2 === 0 ? [180, 104] : null));
+      extents.add(JSON.stringify(extentFromLines(mergeLines(history)!)));
+    }
+    expect([...extents]).toEqual([JSON.stringify(withEdgeCell)]);
+  });
+
+  it("shrinks once a cell has been gone for the whole history", () => {
+    const history: Lines[] = [];
+    recordLines(history, frame([180, 104]));
+    for (let tick = 1; tick < MINIMAP_HISTORY_TICKS; tick++) {
+      recordLines(history, frame(null));
+    }
+    expect(extentFromLines(mergeLines(history)!)).toEqual(withEdgeCell);
+
+    recordLines(history, frame(null));
+    expect(extentFromLines(mergeLines(history)!)).toEqual(matOnly);
   });
 });
