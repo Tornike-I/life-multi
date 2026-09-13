@@ -64,6 +64,7 @@ function createAccount(): { account: Account; key: string } {
     keyHash,
     inventory: STARTING_INVENTORY,
     smoothedLive: 0,
+    recentLive: [],
     liveCells: 0,
     home: null,
     mat: null,

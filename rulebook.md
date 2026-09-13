@@ -53,10 +53,11 @@ For player `p` at tick `t`, after placements:
 
 ```
 L_p(t) = number of squares with color p
-S_p(t) = max( L_p(t), S_p(t−1) · LIVE_SMOOTHING_DECAY )      S_p = 0 for a new account
+P_p(t) = max( L_p(t − LIVE_PEAK_TICKS + 1), …, L_p(t) )      the peak of the last 30 ticks
+S_p(t) = max( P_p(t), S_p(t−1) · LIVE_SMOOTHING_DECAY )     S_p = 0 for a new account
 ```
 
-With `LIVE_SMOOTHING_DECAY` = 0.995, `S` rises immediately when a player gains cells and falls by 0.5% per tick when they lose them. The half-life is `ln 0.5 / ln 0.995` ≈ 138 ticks ≈ 13.8 s. The allowances below use `S`, not `L`, so oscillators and short losses don't make them jitter.
+`S` rises immediately when a player gains cells. Taking the peak first means anything whose cell count repeats within `LIVE_PEAK_TICKS` = 30 ticks (3 s), such as oscillators and spaceships, holds `S` perfectly steady instead of dipping between its peaks. Once the window no longer contains a higher count, `S` falls by 0.5% per tick (`LIVE_SMOOTHING_DECAY` = 0.995), a half-life of `ln 0.5 / ln 0.995` ≈ 138 ticks ≈ 13.8 s. The allowances below use `S`, not `L`. The peak window starts empty whenever the server restarts.
 
 ## 6. Allowances
 
@@ -172,6 +173,7 @@ What a player's screen may show. For now the client applies these limits; the se
 | `TICK_MS`                     | 100 ms  | §1, §7  |
 | `BOARD_SIZE`                  | 512     | §2, §9  |
 | `LIVE_SMOOTHING_DECAY`        | 0.995   | §5      |
+| `LIVE_PEAK_TICKS`             | 30      | §5      |
 | `BASE_MAT_SIDE`               | 8       | §6, §9  |
 | `MAT_AREA_PER_LIVE_CELL`      | 2       | §6, §9  |
 | `BASE_INVENTORY_CAP`          | 12      | §6      |
