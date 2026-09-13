@@ -129,7 +129,11 @@ const server = createServer((req, res) => {
   res.writeHead(404).end();
 });
 
-const wss = new WebSocketServer({ server, path: "/ws" });
+const wss = new WebSocketServer({
+  server,
+  path: "/ws",
+  perMessageDeflate: { threshold: 1024 },
+});
 
 wss.on("connection", (socket) => {
   const session: Session = { account: null, greeted: false };
