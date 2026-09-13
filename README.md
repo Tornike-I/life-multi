@@ -2,13 +2,26 @@
 
 A live, always-on multiplayer take on [Conway's Game of Life](https://en.wikipedia.org/wiki/Conway%27s_Game_of_Life). One shared board evolves continuously on the server; players drop their own colored cells onto it to grow and defend territory.
 
-> **Status:** early prototype. Players join with a guest account, get their own mat, and place cells on a shared 128×128 board.
+> **Status:** early prototype. Players join with a guest account, get their own mat, and place cells on a shared 512×512 board.
 
 ## How it plays
 
 Every player has a color and a rectangular **mat**, the only area where they can place cells. Cells are earned over time and placed in groups. The more live cells of your color are on the board, the bigger your mat and your inventory can get. Once placed, cells follow Conway's rules, and newborn cells take the majority color of their parents.
 
 The full rules and every formula are in **[rulebook.md](rulebook.md)**.
+
+### Controls
+
+| Action           | Input                                                                |
+| ---------------- | -------------------------------------------------------------------- |
+| Zoom             | Mouse wheel, or `+` / `-`                                            |
+| Pan              | Right or middle drag, or WASD / arrow keys                           |
+| Jump to your mat | **My mat** or `H`                                                    |
+| Minimap          | Click or drag it to move the camera                                  |
+| Select squares   | Left click or drag on your mat                                       |
+| Place selection  | **Place** or Enter                                                   |
+| Clear selection  | **Clear** or Esc                                                     |
+| Resize mat       | **Resize mat**, then drag a rectangle that contains your home square |
 
 ## Stack
 

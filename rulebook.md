@@ -15,7 +15,7 @@ The world advances in **ticks**, one every `TICK_MS` = 100 ms (10 ticks per seco
 
 ## 2. Board
 
-- `BOARD_SIZE` × `BOARD_SIZE` = 128 × 128 squares.
+- `BOARD_SIZE` × `BOARD_SIZE` = 512 × 512 squares.
 - The board is a **torus**: the right edge neighbors the left edge and the top neighbors the bottom.
 - Each square is either **dead** or **alive with a color**. A color is a player's account id (1 to 65 535).
 - The board starts empty.
@@ -124,7 +124,7 @@ A mat is a rectangle `(x, y, w, h)` covering columns `x … x+w−1` and rows `y
 
 Joining gives a player a `BASE_MAT_SIDE` × `BASE_MAT_SIDE` (8 × 8) mat:
 
-- Every 8 × 8 position that satisfies the gap rule is a candidate.
+- Candidates are the 8 × 8 positions that satisfy the gap rule and whose `x` and `y` are both multiples of `MAT_SPOT_STRIDE` = 8. If there are none, every position that satisfies the gap rule is a candidate.
 - **Empty board:** pick the candidate whose center is closest to the board's center.
 - **Otherwise:** pick the candidate whose center is farthest from the nearest other mat's center (Euclidean distance on the torus).
 - Ties go to the first candidate in scan order (top row first, left to right).
@@ -149,12 +149,20 @@ At step 3 of every tick, while `w · h > A_p`:
 - Mats, inventory and colors are kept forever, including while the player is offline.
 - **Admin free:** an admin can release an account's mat (`npm run admin -- free <id>`). The mat and home square are removed, cells already on the board stay, and the account keeps its color and inventory. Joining again gives a new spot (§9).
 
+## 11. View
+
+What a player's screen may show. For now the client applies these limits; the server still sends the whole board, so they aren't enforced yet.
+
+- **Camera:** it can be moved anywhere. The board is a torus, so panning past an edge shows the other side again.
+- **Zoom** is measured in squares across the longer side of the board view. It ranges from `MAX_VIEW_SQUARES` = 128 (most zoomed out) to `MIN_VIEW_SQUARES` = 12 (most zoomed in). The camera starts at `DEFAULT_VIEW_SQUARES` = 48 centered on the board, and jumps to the player's mat when they get one.
+- **Minimap:** it covers only the player's own territory: the smallest rectangle on the torus that contains their mat and every live cell of their color. Columns and rows are measured separately, each span being everything outside the longest run of columns (rows) with none of those squares. Each span is padded by `MINIMAP_PADDING` = 16 squares on both sides and widened to at least `MINIMAP_MIN_SQUARES` = 64, but never beyond the board. The minimap shows the player's own cells, their mat and the camera's view, and clicking it moves the camera there.
+
 ## Constants
 
 | Constant                      | Value   | Used in |
 | ----------------------------- | ------- | ------- |
 | `TICK_MS`                     | 100 ms  | §1, §7  |
-| `BOARD_SIZE`                  | 128     | §2, §9  |
+| `BOARD_SIZE`                  | 512     | §2, §9  |
 | `LIVE_SMOOTHING_DECAY`        | 0.995   | §5      |
 | `BASE_MAT_SIDE`               | 8       | §6, §9  |
 | `MAT_AREA_PER_LIVE_CELL`      | 2       | §6      |
@@ -166,4 +174,10 @@ At step 3 of every tick, while `w · h > A_p`:
 | `MAT_MIN_SIDE`                | 4       | §9      |
 | `MAT_MAX_ASPECT`              | 3       | §9      |
 | `MAT_GAP`                     | 3       | §9      |
+| `MAT_SPOT_STRIDE`             | 8       | §9      |
 | `MAX_ACCOUNTS`                | 65 535  | §2, §10 |
+| `MAX_VIEW_SQUARES`            | 128     | §11     |
+| `MIN_VIEW_SQUARES`            | 12      | §11     |
+| `DEFAULT_VIEW_SQUARES`        | 48      | §11     |
+| `MINIMAP_PADDING`             | 16      | §11     |
+| `MINIMAP_MIN_SQUARES`         | 64      | §11     |

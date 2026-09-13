@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  blockedMatPositions,
   findMatSpot,
   matsTooClose,
   rectContains,
@@ -49,11 +50,34 @@ describe("shrinkMat", () => {
   });
 });
 
+describe("blockedMatPositions", () => {
+  it("marks exactly the positions that would be too close to another mat", () => {
+    const others = [
+      { x: 3, y: 50, w: 10, h: 6 },
+      { x: 58, y: 2, w: 5, h: 12 },
+      { x: 30, y: 30, w: 4, h: 4 },
+    ];
+    const blocked = blockedMatPositions(others, 8, 64, 64);
+    const mismatches: string[] = [];
+    for (let y = 0; y < 64; y++) {
+      for (let x = 0; x < 64; x++) {
+        const candidate = { x, y, w: 8, h: 8 };
+        const tooClose = others.some((other) =>
+          matsTooClose(candidate, other, 64, 64),
+        );
+        if ((blocked[y * 64 + x] === 1) !== tooClose)
+          mismatches.push(`${x},${y}`);
+      }
+    }
+    expect(mismatches).toEqual([]);
+  });
+});
+
 describe("findMatSpot", () => {
-  it("starts the first player in the middle of the board", () => {
+  it("starts the first player near the middle of the board", () => {
     expect(findMatSpot([], 10, 64, 64)).toEqual({
-      mat: { x: 27, y: 27, w: 10, h: 10 },
-      home: { x: 32, y: 32 },
+      mat: { x: 24, y: 24, w: 10, h: 10 },
+      home: { x: 29, y: 29 },
     });
   });
 

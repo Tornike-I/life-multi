@@ -9,10 +9,35 @@ import {
   type StateMessage,
   validateMat,
 } from "@life-multi/shared";
+import {
+  type Camera,
+  clampZoom,
+  defaultZoom,
+  dragBy,
+  mod,
+  screenToWorld,
+  type Viewport,
+  zoomAt,
+} from "./camera.ts";
+import { drawMinimap, type MinimapLayout } from "./minimap.ts";
 import { colorFor, draw } from "./render.ts";
 import "./style.css";
 
 const KEY_STORAGE = "life-multi:key";
+const MINIMAP_PX = 180;
+const PAN_STEP_PX = 80;
+const WHEEL_ZOOM_SPEED = 0.0015;
+const KEY_ZOOM_FACTOR = 1.25;
+const PAN_KEYS: Record<string, [number, number]> = {
+  arrowleft: [-1, 0],
+  a: [-1, 0],
+  arrowright: [1, 0],
+  d: [1, 0],
+  arrowup: [0, -1],
+  w: [0, -1],
+  arrowdown: [0, 1],
+  s: [0, 1],
+};
 const SUCCESS_TEXT: Record<ResultMessage["action"], string> = {
   join: "You have a mat. Select empty squares on it, then press Place.",
   place: "Placed.",
@@ -25,6 +50,8 @@ function element<T extends HTMLElement = HTMLElement>(id: string): T {
 
 const canvas = element<HTMLCanvasElement>("board");
 const ctx = canvas.getContext("2d")!;
+const minimap = element<HTMLCanvasElement>("minimap");
+const minimapCtx = minimap.getContext("2d")!;
 const youEl = element("you");
 const statusEl = element("status");
 const generationEl = element("generation");
@@ -36,10 +63,13 @@ const aliveEl = element("alive");
 const placeButton = element<HTMLButtonElement>("place");
 const clearButton = element<HTMLButtonElement>("clear");
 const resizeButton = element<HTMLButtonElement>("resize");
+const homeButton = element<HTMLButtonElement>("home");
 const messageEl = element("message");
 
 type Drag =
-  { kind: "paint"; add: boolean } | { kind: "resize"; from: Point; to: Point };
+  | { kind: "paint"; add: boolean }
+  | { kind: "resize"; from: Point; to: Point }
+  | { kind: "pan"; lastX: number; lastY: number };
 
 let socket: WebSocket;
 let memoryKey: string | null = null;
@@ -50,6 +80,11 @@ let staged = new Set<number>();
 let lastCommit = new Set<number>();
 let resizing = false;
 let drag: Drag | null = null;
+let viewport: Viewport = { width: 1, height: 1 };
+let camera: Camera | null = null;
+let followMat = true;
+let minimapLayout: MinimapLayout | null = null;
+let renderQueued = false;
 
 function loadKey(): string | null {
   try {
@@ -94,7 +129,7 @@ function connect(): void {
   socket.addEventListener("message", (event) => {
     if (event.data instanceof ArrayBuffer) {
       cells = new Uint16Array(event.data);
-      render();
+      scheduleRender();
       return;
     }
     handle(JSON.parse(event.data as string) as ServerMessage);
@@ -110,6 +145,17 @@ function handle(message: ServerMessage): void {
       break;
     case "state":
       state = message;
+      camera ??= {
+        x: message.width / 2,
+        y: message.height / 2,
+        zoom: defaultZoom(viewport),
+      };
+      if (!message.you?.mat) {
+        followMat = true;
+      } else if (followMat) {
+        followMat = false;
+        centerOnMat();
+      }
       pruneStaged();
       break;
     case "result":
@@ -124,6 +170,17 @@ function handle(message: ServerMessage): void {
       break;
   }
   updateHud();
+}
+
+function centerOnMat(): void {
+  const mat = state?.you?.mat;
+  if (!mat) return;
+  camera = {
+    x: mat.x + mat.w / 2,
+    y: mat.y + mat.h / 2,
+    zoom: clampZoom(defaultZoom(viewport), viewport),
+  };
+  scheduleRender();
 }
 
 function pruneStaged(): void {
@@ -163,6 +220,15 @@ function updateHud(): void {
   resizeButton.textContent = resizing ? "Cancel resize" : "Resize mat";
 }
 
+function toBoardRect(rect: Rect, board: StateMessage): Rect {
+  return {
+    x: mod(rect.x, board.width),
+    y: mod(rect.y, board.height),
+    w: rect.w,
+    h: rect.h,
+  };
+}
+
 function resizeProblem(rect: Rect): string | null {
   const home = state?.you?.home;
   if (!state || !home) return "You don't have a mat yet.";
@@ -185,32 +251,73 @@ function rectBetween(a: Point, b: Point): Rect {
   };
 }
 
+function scheduleRender(): void {
+  if (renderQueued) return;
+  renderQueued = true;
+  requestAnimationFrame(() => {
+    renderQueued = false;
+    render();
+  });
+}
+
 function render(): void {
-  if (!state || !cells) return;
+  if (!state || !cells || !camera) return;
+  const board = state;
+  const dpr = window.devicePixelRatio || 1;
   const rect = drag?.kind === "resize" ? rectBetween(drag.from, drag.to) : null;
   draw(ctx, {
     state,
     cells,
     accountId,
     staged,
-    resizePreview: rect && { rect, valid: resizeProblem(rect) === null },
+    camera,
+    dpr,
+    width: viewport.width,
+    height: viewport.height,
+    resizePreview: rect && {
+      rect,
+      valid: resizeProblem(toBoardRect(rect, board)) === null,
+    },
   });
+
+  if (accountId === null) {
+    minimapLayout = null;
+  } else {
+    const backing = Math.round(MINIMAP_PX * dpr);
+    if (minimap.width !== backing) {
+      minimap.width = backing;
+      minimap.height = backing;
+    }
+    minimapLayout = drawMinimap(minimapCtx, MINIMAP_PX, dpr, {
+      state,
+      cells,
+      accountId,
+      camera,
+      viewport,
+    });
+  }
+  minimap.hidden = minimapLayout === null;
 }
 
 function refresh(): void {
-  render();
+  scheduleRender();
   updateHud();
 }
 
-function squareAt(event: PointerEvent): Point | null {
-  if (!state) return null;
+function worldSquareAt(event: MouseEvent): Point | null {
+  if (!camera) return null;
   const bounds = canvas.getBoundingClientRect();
-  const clamp = (fraction: number, size: number) =>
-    Math.min(size - 1, Math.max(0, Math.floor(fraction * size)));
-  return {
-    x: clamp((event.clientX - bounds.left) / bounds.width, state.width),
-    y: clamp((event.clientY - bounds.top) / bounds.height, state.height),
-  };
+  const point = screenToWorld(
+    camera,
+    viewport,
+    event.clientX - bounds.left,
+    event.clientY - bounds.top,
+  );
+  return { x: Math.floor(point.x), y: Math.floor(point.y) };
+}
+
+function boardSquare(world: Point, board: StateMessage): Point {
+  return { x: mod(world.x, board.width), y: mod(world.y, board.height) };
 }
 
 function paint(square: Point): void {
@@ -237,14 +344,36 @@ function commit(): void {
   refresh();
 }
 
+new ResizeObserver(() => {
+  const dpr = window.devicePixelRatio || 1;
+  viewport = { width: canvas.clientWidth, height: canvas.clientHeight };
+  canvas.width = Math.max(1, Math.round(viewport.width * dpr));
+  canvas.height = Math.max(1, Math.round(viewport.height * dpr));
+  if (camera) camera = { ...camera, zoom: clampZoom(camera.zoom, viewport) };
+  scheduleRender();
+}).observe(canvas);
+
+canvas.addEventListener("contextmenu", (event) => event.preventDefault());
+
+canvas.addEventListener("mousedown", (event) => {
+  if (event.button === 1) event.preventDefault();
+});
+
 canvas.addEventListener("pointerdown", (event) => {
+  if (event.button === 1 || event.button === 2) {
+    drag = { kind: "pan", lastX: event.clientX, lastY: event.clientY };
+    canvas.setPointerCapture(event.pointerId);
+    return;
+  }
+
   const mat = state?.you?.mat;
-  const square = squareAt(event);
-  if (!state || !mat || !square) return;
+  const world = worldSquareAt(event);
+  if (!state || !mat || !world || event.button !== 0) return;
 
   if (resizing) {
-    drag = { kind: "resize", from: square, to: square };
+    drag = { kind: "resize", from: world, to: world };
   } else {
+    const square = boardSquare(world, state);
     if (!rectContains(mat, square)) return;
     drag = {
       kind: "paint",
@@ -257,16 +386,31 @@ canvas.addEventListener("pointerdown", (event) => {
 });
 
 canvas.addEventListener("pointermove", (event) => {
-  const square = squareAt(event);
-  if (!drag || !square) return;
-  if (drag.kind === "resize") drag.to = square;
-  else paint(square);
+  if (!drag) return;
+  if (drag.kind === "pan") {
+    if (camera) {
+      camera = dragBy(
+        camera,
+        event.clientX - drag.lastX,
+        event.clientY - drag.lastY,
+      );
+    }
+    drag.lastX = event.clientX;
+    drag.lastY = event.clientY;
+    scheduleRender();
+    return;
+  }
+
+  const world = worldSquareAt(event);
+  if (!world || !state) return;
+  if (drag.kind === "resize") drag.to = world;
+  else paint(boardSquare(world, state));
   refresh();
 });
 
 canvas.addEventListener("pointerup", () => {
-  if (drag?.kind === "resize") {
-    const rect = rectBetween(drag.from, drag.to);
+  if (drag?.kind === "resize" && state) {
+    const rect = toBoardRect(rectBetween(drag.from, drag.to), state);
     const problem = resizeProblem(rect);
     if (problem) messageEl.textContent = problem;
     else send({ type: "resize", mat: rect });
@@ -281,8 +425,48 @@ canvas.addEventListener("pointercancel", () => {
   refresh();
 });
 
+canvas.addEventListener(
+  "wheel",
+  (event) => {
+    event.preventDefault();
+    if (!camera) return;
+    const bounds = canvas.getBoundingClientRect();
+    camera = zoomAt(
+      camera,
+      viewport,
+      event.clientX - bounds.left,
+      event.clientY - bounds.top,
+      Math.exp(-event.deltaY * WHEEL_ZOOM_SPEED),
+    );
+    scheduleRender();
+  },
+  { passive: false },
+);
+
+function jumpFromMinimap(event: PointerEvent): void {
+  if (!minimapLayout || !camera) return;
+  const bounds = minimap.getBoundingClientRect();
+  const { extent, scale, offsetX, offsetY } = minimapLayout;
+  camera = {
+    ...camera,
+    x: extent.x + (event.clientX - bounds.left - offsetX) / scale,
+    y: extent.y + (event.clientY - bounds.top - offsetY) / scale,
+  };
+  scheduleRender();
+}
+
+minimap.addEventListener("pointerdown", (event) => {
+  minimap.setPointerCapture(event.pointerId);
+  jumpFromMinimap(event);
+});
+
+minimap.addEventListener("pointermove", (event) => {
+  if (event.buttons & 1) jumpFromMinimap(event);
+});
+
 joinButton.addEventListener("click", () => send({ type: "join" }));
 placeButton.addEventListener("click", commit);
+homeButton.addEventListener("click", centerOnMat);
 
 clearButton.addEventListener("click", () => {
   staged.clear();
@@ -298,12 +482,31 @@ resizeButton.addEventListener("click", () => {
 });
 
 window.addEventListener("keydown", (event) => {
-  if (event.key === "Enter") commit();
-  if (event.key === "Escape") {
+  const key = event.key.toLowerCase();
+  if (key === "enter") {
+    commit();
+  } else if (key === "escape") {
     staged.clear();
     resizing = false;
     drag = null;
     refresh();
+  } else if (key === "h") {
+    centerOnMat();
+  } else if (camera && (key === "+" || key === "=" || key === "-")) {
+    const factor = key === "-" ? 1 / KEY_ZOOM_FACTOR : KEY_ZOOM_FACTOR;
+    camera = zoomAt(
+      camera,
+      viewport,
+      viewport.width / 2,
+      viewport.height / 2,
+      factor,
+    );
+    scheduleRender();
+  } else if (camera && key in PAN_KEYS) {
+    const [dx, dy] = PAN_KEYS[key];
+    camera = dragBy(camera, -dx * PAN_STEP_PX, -dy * PAN_STEP_PX);
+    event.preventDefault();
+    scheduleRender();
   }
 });
 
