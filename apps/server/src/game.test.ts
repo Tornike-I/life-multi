@@ -23,6 +23,7 @@ function newAccount(game: Game, id: number): Account {
     keyHash: `key-${id}`,
     inventory: STARTING_INVENTORY,
     smoothedLive: 0,
+    recentLive: [],
     liveCells: 0,
     home: null,
     mat: null,
@@ -193,6 +194,37 @@ describe("mats", () => {
 
     expect(game.join(player)).toBeNull();
     expect(player.mat).not.toBeNull();
+  });
+});
+
+describe("smoothing", () => {
+  it("keeps the smoothed count steady for a spaceship whose cell count alternates", () => {
+    const game = newGame();
+    const player = joined(game, 1);
+    const { x, y } = player.mat!;
+    const spaceship: [number, number][] = [
+      [x + 1, y],
+      [x + 4, y],
+      [x, y + 1],
+      [x, y + 2],
+      [x + 4, y + 2],
+      [x, y + 3],
+      [x + 1, y + 3],
+      [x + 2, y + 3],
+      [x + 3, y + 3],
+    ];
+    expect(placeOnNextTick(game, player, spaceship)).toBeNull();
+    for (let i = 0; i < 8; i++) game.tick();
+
+    const liveCounts: number[] = [];
+    const smoothed: number[] = [];
+    for (let i = 0; i < 20; i++) {
+      game.tick();
+      liveCounts.push(player.liveCells);
+      smoothed.push(player.smoothedLive);
+    }
+    expect(new Set(liveCounts).size).toBeGreaterThan(1);
+    expect(new Set(smoothed)).toEqual(new Set([Math.max(...liveCounts)]));
   });
 });
 

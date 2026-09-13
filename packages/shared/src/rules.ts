@@ -14,6 +14,7 @@ export const INVENTORY_CAP_PER_LIVE_CELL = 0.1;
 export const ACCRUAL_MS = 4000;
 
 export const LIVE_SMOOTHING_DECAY = 0.995;
+export const LIVE_PEAK_TICKS = 30;
 
 export const MAX_VIEW_SQUARES = 128;
 export const DEFAULT_VIEW_SQUARES = 48;
@@ -51,4 +52,14 @@ export function matGrowthProgress(smoothedLive: number, side: number): number {
 
 export function inventoryProgress(inventory: number, cap: number): number {
   return inventory >= cap ? 1 : inventory - Math.floor(inventory);
+}
+
+export function recordLive(recent: number[], liveCells: number): number {
+  recent.push(liveCells);
+  if (recent.length > LIVE_PEAK_TICKS) recent.shift();
+  return Math.max(...recent);
+}
+
+export function smoothLive(previous: number, recentPeak: number): number {
+  return Math.max(recentPeak, previous * LIVE_SMOOTHING_DECAY);
 }
