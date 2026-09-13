@@ -20,6 +20,7 @@ export const DEFAULT_VIEW_SQUARES = 48;
 export const MIN_VIEW_SQUARES = 12;
 export const MINIMAP_PADDING = 16;
 export const MINIMAP_MIN_SQUARES = 64;
+export const MINIMAP_CELL_RANGE = 64;
 
 export interface Allowance {
   matArea: number;
