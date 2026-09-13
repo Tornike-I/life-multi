@@ -31,12 +31,12 @@ The commands below assume `--profile life-multi --region eu-central-1`.
 ```sh
 ssh-keygen -t ed25519 -C life-multi-lightsail -f ~/.ssh/life-multi
 aws lightsail import-key-pair --key-pair-name life-multi --public-key-base64 file://~/.ssh/life-multi.pub
-aws lightsail create-instances --instance-names life-multi --availability-zone eu-central-1a \
+aws lightsail create-instances --instance-names life-multi-server --availability-zone eu-central-1a \
   --blueprint-id ubuntu_24_04 --bundle-id micro_3_0 --key-pair-name life-multi \
   --add-ons addOnType=AutoSnapshot
 aws lightsail allocate-static-ip --static-ip-name life-multi-ip
-aws lightsail attach-static-ip --static-ip-name life-multi-ip --instance-name life-multi
-aws lightsail put-instance-public-ports --instance-name life-multi --port-infos \
+aws lightsail attach-static-ip --static-ip-name life-multi-ip --instance-name life-multi-server
+aws lightsail put-instance-public-ports --instance-name life-multi-server --port-infos \
   fromPort=22,toPort=22,protocol=tcp,cidrs=<your-ip>/32 \
   fromPort=80,toPort=80,protocol=tcp \
   fromPort=443,toPort=443,protocol=tcp
