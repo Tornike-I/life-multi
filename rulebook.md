@@ -61,24 +61,27 @@ With `LIVE_SMOOTHING_DECAY` = 0.995, `S` rises immediately when a player gains c
 ## 6. Allowances
 
 ```
-Mat area allowance   A_p = floor( BASE_MAT_SIDE² + MAT_AREA_PER_LIVE_CELL · S_p )       = floor(100 + 2 · S_p)
-Inventory cap        C_p = floor( BASE_INVENTORY_CAP + INVENTORY_CAP_PER_LIVE_CELL · S_p ) = floor(20 + 0.2 · S_p)
+Mat area allowance   A_p = floor( BASE_MAT_SIDE² + MAT_AREA_PER_LIVE_CELL · S_p )       = floor(64 + 2 · S_p)
+Inventory cap        C_p = floor( BASE_INVENTORY_CAP + INVENTORY_CAP_PER_LIVE_CELL · S_p ) = floor(12 + 0.1 · S_p)
 ```
 
 | Smoothed live cells `S` | Mat allowance `A` | Inventory cap `C` |
 | ----------------------- | ----------------- | ----------------- |
-| 0                       | 100 (10 × 10)     | 20                |
-| 50                      | 200               | 30                |
-| 150                     | 400 (20 × 20)     | 50                |
-| 450                     | 1000              | 110               |
+| 0                       | 64 (8 × 8)        | 12                |
+| 50                      | 164               | 17                |
+| 150                     | 364               | 27                |
+| 240                     | 544               | 36                |
+| 450                     | 964               | 57                |
+
+**Example milestone:** a Gosper glider gun has 36 cells and a 36 × 9 bounding box. Because of the proportions rule (§9) it needs a mat of at least 36 × 12 = 432 squares, so `A ≥ 432` requires `S ≥ 184`. Placing it in one group needs `C ≥ 36`, which requires `S ≥ 240`.
 
 ## 7. Inventory
 
-- A new account starts with `I = STARTING_INVENTORY` = 20.
+- A new account starts with `I = STARTING_INVENTORY` = 12.
 - Every tick, while the player has a mat (online or not):
 
   ```
-  if I < C:  I = min( C, I + TICK_MS / ACCRUAL_MS )      = I + 0.05, i.e. 1 cell every 2 s
+  if I < C:  I = min( C, I + TICK_MS / ACCRUAL_MS )      = I + 0.025, i.e. 1 cell every 4 s
   ```
 
   If `I ≥ C` (for example after `C` dropped), `I` stays where it is: it is never reduced, it just stops growing.
@@ -119,13 +122,13 @@ A mat is a rectangle `(x, y, w, h)` covering columns `x … x+w−1` and rows `y
 
 ### Joining
 
-Joining gives a player a `BASE_MAT_SIDE` × `BASE_MAT_SIDE` (10 × 10) mat:
+Joining gives a player a `BASE_MAT_SIDE` × `BASE_MAT_SIDE` (8 × 8) mat:
 
-- Every 10 × 10 position that satisfies the gap rule is a candidate.
+- Every 8 × 8 position that satisfies the gap rule is a candidate.
 - **Empty board:** pick the candidate whose center is closest to the board's center.
 - **Otherwise:** pick the candidate whose center is farthest from the nearest other mat's center (Euclidean distance on the torus).
 - Ties go to the first candidate in scan order (top row first, left to right).
-- The **home square** is `(x + 5, y + 5)`.
+- The **home square** is `(x + 4, y + 4)`.
 - If there is no candidate, joining fails until space frees up.
 
 ### Resizing
@@ -153,12 +156,12 @@ At step 3 of every tick, while `w · h > A_p`:
 | `TICK_MS`                     | 100 ms  | §1, §7  |
 | `BOARD_SIZE`                  | 128     | §2, §9  |
 | `LIVE_SMOOTHING_DECAY`        | 0.995   | §5      |
-| `BASE_MAT_SIDE`               | 10      | §6, §9  |
+| `BASE_MAT_SIDE`               | 8       | §6, §9  |
 | `MAT_AREA_PER_LIVE_CELL`      | 2       | §6      |
-| `BASE_INVENTORY_CAP`          | 20      | §6      |
-| `INVENTORY_CAP_PER_LIVE_CELL` | 0.2     | §6      |
-| `STARTING_INVENTORY`          | 20      | §7      |
-| `ACCRUAL_MS`                  | 2000 ms | §7      |
+| `BASE_INVENTORY_CAP`          | 12      | §6      |
+| `INVENTORY_CAP_PER_LIVE_CELL` | 0.1     | §6      |
+| `STARTING_INVENTORY`          | 12      | §7      |
+| `ACCRUAL_MS`                  | 4000 ms | §7      |
 | `MAX_CELLS_PER_PLACE`         | 256     | §8      |
 | `MAT_MIN_SIDE`                | 4       | §9      |
 | `MAT_MAX_ASPECT`              | 3       | §9      |
