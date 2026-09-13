@@ -80,3 +80,111 @@ button:disabled {
   text-align: center;
   color: #9ca3af;
 }
+
+input {
+  font: inherit;
+  padding: 4px 8px;
+  border: 1px solid #374151;
+  border-radius: 6px;
+  background: #111827;
+  color: inherit;
+}
+
+dialog {
+  box-sizing: border-box;
+  width: min(1000px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  padding: 16px;
+  border: 1px solid #374151;
+  border-radius: 10px;
+  background: #0b0d12;
+  color: inherit;
+}
+
+dialog::backdrop {
+  background: rgb(0 0 0 / 0.6);
+}
+
+dialog h2 {
+  margin: 0 0 8px;
+  font-size: 15px;
+}
+
+.dialog-body {
+  display: grid;
+  gap: 16px;
+}
+
+@media (min-width: 900px) {
+  .dialog-body {
+    grid-template-columns: 300px minmax(0, 1fr);
+  }
+
+  .dialog-body .library ul {
+    max-height: min(420px, calc(100vh - 160px));
+  }
+}
+
+.library ul {
+  display: grid;
+  gap: 6px;
+  max-height: 160px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.library li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) repeat(3, auto);
+  align-items: center;
+  column-gap: 6px;
+  font-size: 14px;
+}
+
+.library li .meta {
+  grid-column: 1;
+  grid-row: 2;
+}
+
+.library li button {
+  grid-row: 1 / span 2;
+}
+
+.meta {
+  margin-right: auto;
+  font-size: 12px;
+  color: #9ca3af;
+}
+
+#editor-canvas {
+  display: block;
+  width: auto;
+  max-width: 100%;
+  height: auto;
+  max-height: calc(100vh - 260px);
+  border: 1px solid #1f2937;
+  border-radius: 6px;
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.editor-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.editor .hint {
+  text-align: left;
+  margin-top: 8px;
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 12px;
+}

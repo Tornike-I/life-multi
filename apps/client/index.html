@@ -24,9 +24,37 @@
         <button id="place" disabled>Place 0</button>
         <button id="clear">Clear</button>
         <button id="resize">Resize mat</button>
+        <button id="blueprints-open">Blueprints</button>
         <button id="home">My mat</button>
       </div>
     </div>
+    <dialog id="blueprints">
+      <div class="dialog-body">
+        <section class="library">
+          <h2>Blueprints</h2>
+          <ul id="blueprint-list"></ul>
+        </section>
+        <section class="editor">
+          <h2 id="editor-title">New blueprint</h2>
+          <canvas id="editor-canvas"></canvas>
+          <div class="editor-tools">
+            <input id="blueprint-name" placeholder="Name" />
+            <span id="editor-count" class="meta"></span>
+          </div>
+          <div class="editor-tools">
+            <button id="editor-rotate" type="button">Rotate</button>
+            <button id="editor-flip" type="button">Flip</button>
+            <button id="editor-clear" type="button">Clear</button>
+            <button id="editor-save" type="button">Save</button>
+            <button id="editor-use" type="button">Use</button>
+          </div>
+          <p id="editor-message" class="hint"></p>
+        </section>
+      </div>
+      <form method="dialog" class="dialog-actions">
+        <button>Close</button>
+      </form>
+    </dialog>
     <p id="message" class="hint">
       Wheel to zoom, right-drag or WASD to pan. Select empty squares on your
       mat, then press Place (Enter).
