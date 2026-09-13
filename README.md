@@ -22,7 +22,8 @@ The full rules and every formula are in **[rulebook.md](rulebook.md)**.
 | Place selection  | **Place** or Enter                                                   |
 | Clear selection  | **Clear** or Esc                                                     |
 | Blueprints       | **Blueprints** opens the library and editor; **Use** one to stamp it |
-| Stamp            | Click to select its squares, `R` rotate, `F` flip, Esc to stop       |
+| Stamp            | Click to select its squares, `R` rotate, `F` flip                    |
+| Stop stamping    | **Cancel blueprint** or Esc                                          |
 
 ## Stack
 
