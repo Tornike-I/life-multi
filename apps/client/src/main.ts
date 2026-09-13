@@ -145,11 +145,14 @@ function handle(message: ServerMessage): void {
       break;
     case "state":
       state = message;
-      camera ??= {
-        x: message.width / 2,
-        y: message.height / 2,
-        zoom: defaultZoom(viewport),
-      };
+      if (!camera) {
+        measureViewport();
+        camera = {
+          x: message.width / 2,
+          y: message.height / 2,
+          zoom: defaultZoom(viewport),
+        };
+      }
       if (!message.you?.mat) {
         followMat = true;
       } else if (followMat) {
@@ -344,14 +347,16 @@ function commit(): void {
   refresh();
 }
 
-new ResizeObserver(() => {
+function measureViewport(): void {
   const dpr = window.devicePixelRatio || 1;
   viewport = { width: canvas.clientWidth, height: canvas.clientHeight };
   canvas.width = Math.max(1, Math.round(viewport.width * dpr));
   canvas.height = Math.max(1, Math.round(viewport.height * dpr));
   if (camera) camera = { ...camera, zoom: clampZoom(camera.zoom, viewport) };
   scheduleRender();
-}).observe(canvas);
+}
+
+new ResizeObserver(measureViewport).observe(canvas);
 
 canvas.addEventListener("contextmenu", (event) => event.preventDefault());
 
