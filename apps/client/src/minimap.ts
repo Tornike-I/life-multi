@@ -1,4 +1,9 @@
-import { ownExtent, type Rect, type StateMessage } from "@life-multi/shared";
+import {
+  DEAD,
+  ownExtent,
+  type Rect,
+  type StateMessage,
+} from "@life-multi/shared";
 import { type Camera, mod, type Viewport } from "./camera.ts";
 import { colorFor } from "./render.ts";
 
@@ -56,13 +61,17 @@ export function drawMinimap(
   }
 
   const dot = Math.max(scale, 1 / dpr);
-  ctx.fillStyle = colorFor(accountId);
+  let fillColor = DEAD;
   for (let y = extent.y; y < extent.y + extent.h; y++) {
     const row = mod(y, height) * width;
     for (let x = extent.x; x < extent.x + extent.w; x++) {
-      if (cells[row + mod(x, width)] === accountId) {
-        ctx.fillRect(toX(x), toY(y), dot, dot);
+      const color = cells[row + mod(x, width)];
+      if (color === DEAD) continue;
+      if (color !== fillColor) {
+        fillColor = color;
+        ctx.fillStyle = colorFor(color);
       }
+      ctx.fillRect(toX(x), toY(y), dot, dot);
     }
   }
 
