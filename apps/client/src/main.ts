@@ -428,15 +428,6 @@ function commit(): void {
   refresh();
 }
 
-function measureViewport(): void {
-  const dpr = window.devicePixelRatio || 1;
-  viewport = { width: canvas.clientWidth, height: canvas.clientHeight };
-  canvas.width = Math.max(1, Math.round(viewport.width * dpr));
-  canvas.height = Math.max(1, Math.round(viewport.height * dpr));
-  if (camera) camera = { ...camera, zoom: clampZoom(camera.zoom, viewport) };
-  scheduleRender();
-}
-
 new ResizeObserver(measureViewport).observe(canvas);
 
 canvas.addEventListener("contextmenu", (event) => event.preventDefault());
