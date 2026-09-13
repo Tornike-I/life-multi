@@ -1,7 +1,7 @@
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { BOARD_SIZE, createBoard } from "@life-multi/shared";
+import { BOARD_SIZE, createBoard, squareMat } from "@life-multi/shared";
 import { Game } from "./game.ts";
 
 export const DATABASE_PATH = process.env.DATABASE_PATH ?? "data/life-multi.db";
@@ -119,7 +119,12 @@ export function loadGame(db: DatabaseSync, newSeed: () => number): Game {
       liveCells: row.live_cells,
       home: hasMat ? { x: row.home_x!, y: row.home_y! } : null,
       mat: hasMat
-        ? { x: row.mat_x!, y: row.mat_y!, w: row.mat_w!, h: row.mat_h! }
+        ? squareMat(
+            { x: row.home_x!, y: row.home_y! },
+            Math.min(row.mat_w!, row.mat_h!),
+            BOARD_SIZE,
+            BOARD_SIZE,
+          )
         : null,
     });
   }

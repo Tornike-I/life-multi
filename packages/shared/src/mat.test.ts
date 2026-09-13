@@ -2,51 +2,67 @@ import { describe, expect, it } from "vitest";
 import {
   blockedMatPositions,
   findMatSpot,
+  growMat,
+  matContains,
   matsTooClose,
-  rectContains,
-  shrinkMat,
-  validateMat,
+  squareMat,
 } from "./mat.ts";
 
-describe("validateMat", () => {
-  const home = { x: 5, y: 5 };
-  const mat = { x: 0, y: 0, w: 10, h: 10 };
-
-  it("accepts a mat that follows the rules", () => {
-    expect(validateMat(mat, home, 100, [], 64, 64)).toBeNull();
+describe("squareMat", () => {
+  it("centers the square on home, alternating the side that grows", () => {
+    const home = { x: 10, y: 10 };
+    expect(squareMat(home, 8, 64, 64)).toEqual({ x: 6, y: 6, w: 8, h: 8 });
+    expect(squareMat(home, 9, 64, 64)).toEqual({ x: 6, y: 6, w: 9, h: 9 });
+    expect(squareMat(home, 10, 64, 64)).toEqual({ x: 5, y: 5, w: 10, h: 10 });
   });
 
-  it.each([
-    ["larger than the allowance", { x: 0, y: 0, w: 11, h: 10 }],
-    ["thinner than the minimum side", { x: 4, y: 0, w: 3, h: 30 }],
-    ["too stretched", { x: 4, y: 0, w: 4, h: 13 }],
-    ["outside the board", { x: -1, y: 0, w: 10, h: 10 }],
-    ["missing the home square", { x: 6, y: 0, w: 10, h: 10 }],
-  ])("rejects a mat %s", (_, candidate) => {
-    expect(validateMat(candidate, home, 100, [], 64, 64)).not.toBeNull();
-  });
-
-  it("requires a gap to other mats", () => {
-    const tooClose = { x: 12, y: 0, w: 10, h: 10 };
-    const farEnough = { x: 13, y: 0, w: 10, h: 10 };
-    expect(validateMat(mat, home, 100, [tooClose], 64, 64)).not.toBeNull();
-    expect(validateMat(mat, home, 100, [farEnough], 64, 64)).toBeNull();
-  });
-
-  it("measures the gap across the wrapped board edge", () => {
-    const tooClose = { x: 58, y: 0, w: 4, h: 10 };
-    const farEnough = { x: 57, y: 0, w: 4, h: 10 };
-    expect(matsTooClose(mat, tooClose, 64, 64)).toBe(true);
-    expect(matsTooClose(mat, farEnough, 64, 64)).toBe(false);
+  it("wraps across the board edge", () => {
+    const mat = squareMat({ x: 1, y: 1 }, 8, 64, 64);
+    expect(mat).toEqual({ x: 61, y: 61, w: 8, h: 8 });
+    expect(matContains(mat, { x: 62, y: 0 }, 64, 64)).toBe(true);
+    expect(matContains(mat, { x: 4, y: 4 }, 64, 64)).toBe(true);
+    expect(matContains(mat, { x: 5, y: 4 }, 64, 64)).toBe(false);
   });
 });
 
-describe("shrinkMat", () => {
-  it("fits the allowance while keeping the home square", () => {
-    const home = { x: 2, y: 5 };
-    const shrunk = shrinkMat({ x: 0, y: 0, w: 30, h: 10 }, home, 100);
-    expect(shrunk).toEqual({ x: 0, y: 0, w: 10, h: 10 });
-    expect(rectContains(shrunk, home)).toBe(true);
+describe("matsTooClose", () => {
+  const mat = { x: 0, y: 0, w: 10, h: 10 };
+
+  it("requires a gap to other mats", () => {
+    expect(matsTooClose(mat, { x: 12, y: 0, w: 10, h: 10 }, 64, 64)).toBe(true);
+    expect(matsTooClose(mat, { x: 13, y: 0, w: 10, h: 10 }, 64, 64)).toBe(
+      false,
+    );
+  });
+
+  it("measures the gap across the wrapped board edge", () => {
+    expect(matsTooClose(mat, { x: 58, y: 0, w: 4, h: 10 }, 64, 64)).toBe(true);
+    expect(matsTooClose(mat, { x: 57, y: 0, w: 4, h: 10 }, 64, 64)).toBe(false);
+  });
+});
+
+describe("growMat", () => {
+  const home = { x: 10, y: 4 };
+
+  it("grows up to the target side when nothing is in the way", () => {
+    expect(growMat(home, 8, 20, [], 64, 64)).toBe(20);
+  });
+
+  it("stops before the size that would break the gap", () => {
+    const neighbor = { x: 20, y: 0, w: 8, h: 8 };
+    const side = growMat(home, 8, 20, [neighbor], 64, 64);
+    expect(side).toBe(14);
+    expect(matsTooClose(squareMat(home, side, 64, 64), neighbor, 64, 64)).toBe(
+      false,
+    );
+  });
+
+  it("shrinks straight to a smaller target", () => {
+    expect(growMat(home, 12, 9, [], 64, 64)).toBe(9);
+  });
+
+  it("never grows past the board", () => {
+    expect(growMat(home, 8, 100, [], 64, 64)).toBe(64);
   });
 });
 
@@ -65,8 +81,9 @@ describe("blockedMatPositions", () => {
         const tooClose = others.some((other) =>
           matsTooClose(candidate, other, 64, 64),
         );
-        if ((blocked[y * 64 + x] === 1) !== tooClose)
+        if ((blocked[y * 64 + x] === 1) !== tooClose) {
           mismatches.push(`${x},${y}`);
+        }
       }
     }
     expect(mismatches).toEqual([]);
@@ -75,15 +92,15 @@ describe("blockedMatPositions", () => {
 
 describe("findMatSpot", () => {
   it("starts the first player near the middle of the board", () => {
-    expect(findMatSpot([], 10, 64, 64)).toEqual({
-      mat: { x: 24, y: 24, w: 10, h: 10 },
-      home: { x: 29, y: 29 },
+    expect(findMatSpot([], 8, 64, 64)).toEqual({
+      mat: { x: 24, y: 24, w: 8, h: 8 },
+      home: { x: 28, y: 28 },
     });
   });
 
   it("keeps new spots clear of existing mats", () => {
-    const first = { x: 27, y: 27, w: 10, h: 10 };
-    const spot = findMatSpot([first], 10, 64, 64);
+    const first = { x: 24, y: 24, w: 8, h: 8 };
+    const spot = findMatSpot([first], 8, 64, 64);
     expect(spot).not.toBeNull();
     expect(matsTooClose(spot!.mat, first, 64, 64)).toBe(false);
   });

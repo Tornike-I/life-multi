@@ -4,14 +4,16 @@ import {
   createBoard,
   DEAD,
   matsTooClose,
-  rectContains,
+  squareMat,
   STARTING_INVENTORY,
   TICK_MS,
 } from "@life-multi/shared";
 import { describe, expect, it } from "vitest";
 import { type Account, Game } from "./game.ts";
 
-function newGame(size = 64): Game {
+const SIZE = 64;
+
+function newGame(size = SIZE): Game {
   return new Game(createBoard(size, size), 0, 1);
 }
 
@@ -30,10 +32,10 @@ function newAccount(game: Game, id: number): Account {
   return account;
 }
 
-function joined(game: Game, id: number): Account & { mat: object } {
+function joined(game: Game, id: number): Account {
   const account = newAccount(game, id);
   expect(game.join(account)).toBeNull();
-  return account as Account & { mat: object };
+  return account;
 }
 
 function placeOnNextTick(
@@ -118,6 +120,24 @@ describe("placement", () => {
     ]);
     expect(reason).toMatch(/only have 3/);
   });
+
+  it("places on a mat that wraps across the board edge", () => {
+    const game = newGame();
+    const player = joined(game, 1);
+    player.home = { x: 1, y: 1 };
+    player.mat = squareMat(player.home, 8, SIZE, SIZE);
+
+    expect(
+      placeOnNextTick(game, player, [
+        [62, 0],
+        [-2, 1],
+        [3, 3],
+      ]),
+    ).toBeNull();
+    expect(cellAt(game, 62, 0)).toBe(1);
+    expect(cellAt(game, 62, 1)).toBe(1);
+    expect(cellAt(game, 3, 3)).toBe(1);
+  });
 });
 
 describe("mats", () => {
@@ -125,7 +145,7 @@ describe("mats", () => {
     const game = newGame();
     const first = joined(game, 1);
     const second = joined(game, 2);
-    expect(matsTooClose(first.mat!, second.mat!, 64, 64)).toBe(false);
+    expect(matsTooClose(first.mat!, second.mat!, SIZE, SIZE)).toBe(false);
   });
 
   it("refuses to join when there is no space left", () => {
@@ -134,15 +154,35 @@ describe("mats", () => {
     expect(game.join(newAccount(game, 2))).toMatch(/No free space/);
   });
 
-  it("shrinks a mat that exceeds the allowance while keeping home", () => {
+  it("grows the mat one square around home when the allowance reaches the next square", () => {
     const game = newGame();
     const player = joined(game, 1);
-    player.mat = { x: player.mat!.x, y: player.mat!.y, w: 20, h: 10 };
+    player.smoothedLive = 9;
 
     game.tick();
-    const { mat, home } = player;
-    expect(mat!.w * mat!.h).toBeLessThanOrEqual(allowanceFor(0).matArea);
-    expect(rectContains(mat!, home!)).toBe(true);
+    expect(player.mat).toEqual(squareMat(player.home!, 9, SIZE, SIZE));
+  });
+
+  it("shrinks the mat straight to the allowed side", () => {
+    const game = newGame();
+    const player = joined(game, 1);
+    player.mat = squareMat(player.home!, 12, SIZE, SIZE);
+
+    game.tick();
+    expect(player.mat).toEqual(squareMat(player.home!, 8, SIZE, SIZE));
+  });
+
+  it("stops growing before another mat's gap and reports it as blocked", () => {
+    const game = newGame();
+    const first = joined(game, 1);
+    const second = joined(game, 2);
+    first.smoothedLive = 5000;
+
+    game.tick();
+    expect(first.mat!.w).toBeGreaterThan(8);
+    expect(matsTooClose(first.mat!, second.mat!, SIZE, SIZE)).toBe(false);
+    expect(game.status(first).matBlocked).toBe(true);
+    expect(game.status(second).matBlocked).toBe(false);
   });
 
   it("gives a freed account a new spot when it joins again", () => {
@@ -165,5 +205,18 @@ describe("inventory", () => {
 
     for (let i = 0; i < 10; i++) game.tick();
     expect(player.inventory).toBe(inventoryCap);
+  });
+
+  it("reports progress toward the next cell and the next mat size", () => {
+    const game = newGame();
+    const player = joined(game, 1);
+    player.inventory = 3.5;
+    player.smoothedLive = 4.25;
+
+    const status = game.status(player);
+    expect(status.inventory).toBe(3);
+    expect(status.inventoryProgress).toBe(0.5);
+    expect(status.matProgress).toBe(0.5);
+    expect(status.matBlocked).toBe(false);
   });
 });

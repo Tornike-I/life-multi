@@ -4,8 +4,6 @@ export const TICK_MS = 100;
 export const MAX_ACCOUNTS = 65535;
 
 export const MAT_GAP = 3;
-export const MAT_MIN_SIDE = 4;
-export const MAT_MAX_ASPECT = 3;
 export const BASE_MAT_SIDE = 8;
 export const MAT_AREA_PER_LIVE_CELL = 2;
 export const MAT_SPOT_STRIDE = 8;
@@ -28,13 +26,28 @@ export interface Allowance {
   inventoryCap: number;
 }
 
+function exactMatArea(smoothedLive: number): number {
+  return BASE_MAT_SIDE ** 2 + MAT_AREA_PER_LIVE_CELL * smoothedLive;
+}
+
 export function allowanceFor(smoothedLive: number): Allowance {
   return {
-    matArea: Math.floor(
-      BASE_MAT_SIDE ** 2 + MAT_AREA_PER_LIVE_CELL * smoothedLive,
-    ),
+    matArea: Math.floor(exactMatArea(smoothedLive)),
     inventoryCap: Math.floor(
       BASE_INVENTORY_CAP + INVENTORY_CAP_PER_LIVE_CELL * smoothedLive,
     ),
   };
+}
+
+export function matSideFor(smoothedLive: number): number {
+  return Math.floor(Math.sqrt(allowanceFor(smoothedLive).matArea));
+}
+
+export function matGrowthProgress(smoothedLive: number, side: number): number {
+  const progress = (exactMatArea(smoothedLive) - side * side) / (2 * side + 1);
+  return Math.min(1, Math.max(0, progress));
+}
+
+export function inventoryProgress(inventory: number, cap: number): number {
+  return inventory >= cap ? 1 : inventory - Math.floor(inventory);
 }

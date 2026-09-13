@@ -188,3 +188,34 @@ dialog h2 {
   justify-content: flex-end;
   margin-top: 12px;
 }
+
+.stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ring {
+  width: 18px;
+  height: 18px;
+  transform: rotate(-90deg);
+}
+
+.ring circle {
+  fill: none;
+  stroke-width: 3;
+}
+
+.ring-track {
+  stroke: #1f2937;
+}
+
+.ring-fill {
+  stroke: var(--player, #e5e7eb);
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+}
+
+#mat-stat.blocked .ring-fill {
+  stroke: #f59e0b;
+}

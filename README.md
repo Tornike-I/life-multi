@@ -6,7 +6,7 @@ A live, always-on multiplayer take on [Conway's Game of Life](https://en.wikiped
 
 ## How it plays
 
-Every player has a color and a rectangular **mat**, the only area where they can place cells. Cells are earned over time and placed in groups. The more live cells of your color are on the board, the bigger your mat and your inventory can get. Once placed, cells follow Conway's rules, and newborn cells take the majority color of their parents.
+Every player has a color and a square **mat**, the only area where they can place cells. Cells are earned over time and placed in groups. The more live cells of your color are on the board, the bigger your inventory gets and the further your mat grows out from its center. Two rings under the board show the next cell being earned and the progress toward the next mat size. Once placed, cells follow Conway's rules, and newborn cells take the majority color of their parents.
 
 The full rules and every formula are in **[rulebook.md](rulebook.md)**.
 
@@ -21,7 +21,6 @@ The full rules and every formula are in **[rulebook.md](rulebook.md)**.
 | Select squares   | Left click or drag on your mat                                       |
 | Place selection  | **Place** or Enter                                                   |
 | Clear selection  | **Clear** or Esc                                                     |
-| Resize mat       | **Resize mat**, then drag a rectangle that contains your home square |
 | Blueprints       | **Blueprints** opens the library and editor; **Use** one to stamp it |
 | Stamp            | Click to select its squares, `R` rotate, `F` flip, Esc to stop       |
 

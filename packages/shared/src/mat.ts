@@ -1,9 +1,4 @@
-import {
-  MAT_GAP,
-  MAT_MAX_ASPECT,
-  MAT_MIN_SIDE,
-  MAT_SPOT_STRIDE,
-} from "./rules.ts";
+import { MAT_GAP, MAT_SPOT_STRIDE } from "./rules.ts";
 
 export interface Point {
   x: number;
@@ -17,12 +12,33 @@ export interface Rect {
   h: number;
 }
 
-export function rectContains(rect: Rect, point: Point): boolean {
+export function mod(n: number, size: number): number {
+  return ((n % size) + size) % size;
+}
+
+export function squareMat(
+  home: Point,
+  side: number,
+  width: number,
+  height: number,
+): Rect {
+  const half = Math.floor(side / 2);
+  return {
+    x: mod(home.x - half, width),
+    y: mod(home.y - half, height),
+    w: side,
+    h: side,
+  };
+}
+
+export function matContains(
+  mat: Rect,
+  point: Point,
+  width: number,
+  height: number,
+): boolean {
   return (
-    point.x >= rect.x &&
-    point.x < rect.x + rect.w &&
-    point.y >= rect.y &&
-    point.y < rect.y + rect.h
+    mod(point.x - mat.x, width) < mat.w && mod(point.y - mat.y, height) < mat.h
   );
 }
 
@@ -34,8 +50,7 @@ function ringOverlap(
   size: number,
 ): boolean {
   if (aLength >= size || bLength >= size) return true;
-  const mod = (n: number) => ((n % size) + size) % size;
-  return mod(b - a) < aLength || mod(a - b) < bLength;
+  return mod(b - a, size) < aLength || mod(a - b, size) < bLength;
 }
 
 export function matsTooClose(
@@ -50,70 +65,26 @@ export function matsTooClose(
   );
 }
 
-export function validateMat(
-  mat: Rect,
+export function growMat(
   home: Point,
-  maxArea: number,
+  side: number,
+  targetSide: number,
   others: readonly Rect[],
   width: number,
   height: number,
-): string | null {
-  const { x, y, w, h } = mat;
-  if (![x, y, w, h].every(Number.isInteger)) {
-    return "Mat edges must line up with squares.";
-  }
-  if (w < MAT_MIN_SIDE || h < MAT_MIN_SIDE) {
-    return `Each side must be at least ${MAT_MIN_SIDE} squares.`;
-  }
-  if (x < 0 || y < 0 || x + w > width || y + h > height) {
-    return "Mat must fit inside the board.";
-  }
-  if (Math.max(w, h) > MAT_MAX_ASPECT * Math.min(w, h)) {
-    return `The long side can be at most ${MAT_MAX_ASPECT}× the short side.`;
-  }
-  if (w * h > maxArea) {
-    return `Your mat can cover at most ${maxArea} squares.`;
-  }
-  if (!rectContains(mat, home)) {
-    return "Mat must contain your home square.";
-  }
-  if (others.some((other) => matsTooClose(mat, other, width, height))) {
-    return `Mat must stay ${MAT_GAP} squares away from other mats.`;
-  }
-  return null;
-}
-
-export function shrinkMat(mat: Rect, home: Point, maxArea: number): Rect {
-  let { x, y, w, h } = mat;
-  while (w * h > maxArea) {
-    const shrinkWidth = h <= MAT_MIN_SIDE || (w >= h && w > MAT_MIN_SIDE);
-    if (shrinkWidth) {
-      if (w <= MAT_MIN_SIDE) break;
-      if (home.x - x > x + w - 1 - home.x) x++;
-      w--;
-    } else {
-      if (home.y - y > y + h - 1 - home.y) y++;
-      h--;
-    }
-  }
-  return { x, y, w, h };
-}
-
-function ringDistance(a: number, b: number, size: number): number {
-  const d = Math.abs(a - b) % size;
-  return Math.min(d, size - d);
-}
-
-function centerDistance(
-  a: Rect,
-  b: Rect,
-  width: number,
-  height: number,
 ): number {
-  return Math.hypot(
-    ringDistance(a.x + a.w / 2, b.x + b.w / 2, width),
-    ringDistance(a.y + a.h / 2, b.y + b.h / 2, height),
-  );
+  const target = Math.min(targetSide, width, height);
+  if (target <= side) return target;
+
+  let grown = side;
+  while (grown < target) {
+    const next = squareMat(home, grown + 1, width, height);
+    if (others.some((other) => matsTooClose(next, other, width, height))) {
+      break;
+    }
+    grown++;
+  }
+  return grown;
 }
 
 function ringSegments(
@@ -122,7 +93,7 @@ function ringSegments(
   size: number,
 ): [number, number][] {
   if (length >= size) return [[0, size]];
-  const from = ((start % size) + size) % size;
+  const from = mod(start, size);
   const to = from + length;
   return to <= size
     ? [[from, to]]
@@ -176,6 +147,23 @@ export function blockedMatPositions(
   return blocked;
 }
 
+function ringDistance(a: number, b: number, size: number): number {
+  const d = Math.abs(a - b) % size;
+  return Math.min(d, size - d);
+}
+
+function centerDistance(
+  a: Rect,
+  b: Rect,
+  width: number,
+  height: number,
+): number {
+  return Math.hypot(
+    ringDistance(a.x + a.w / 2, b.x + b.w / 2, width),
+    ringDistance(a.y + a.h / 2, b.y + b.h / 2, height),
+  );
+}
+
 function bestSpot(
   blocked: Uint8Array,
   others: readonly Rect[],
@@ -188,8 +176,8 @@ function bestSpot(
   let best: Rect | null = null;
   let bestScore = -Infinity;
 
-  for (let y = 0; y + side <= height; y += stride) {
-    for (let x = 0; x + side <= width; x += stride) {
+  for (let y = 0; y < height; y += stride) {
+    for (let x = 0; x < width; x += stride) {
       if (blocked[y * width + x]) continue;
       const mat = { x, y, w: side, h: side };
       let score =
@@ -220,5 +208,8 @@ export function findMatSpot(
     bestSpot(blocked, others, side, width, height, 1);
   if (!best) return null;
   const half = Math.floor(side / 2);
-  return { mat: best, home: { x: best.x + half, y: best.y + half } };
+  return {
+    mat: best,
+    home: { x: mod(best.x + half, width), y: mod(best.y + half, height) },
+  };
 }

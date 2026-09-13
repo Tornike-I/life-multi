@@ -5,16 +5,20 @@ import {
   type Board,
   DEAD,
   findMatSpot,
+  growMat,
+  inventoryProgress,
   LIVE_SMOOTHING_DECAY,
+  matContains,
+  matGrowthProgress,
   type MatInfo,
+  matSideFor,
+  mod,
   type PlayerStatus,
   type Point,
   type Rect,
-  rectContains,
-  shrinkMat,
+  squareMat,
   step,
   TICK_MS,
-  validateMat,
 } from "@life-multi/shared";
 
 export interface Account {
@@ -88,21 +92,6 @@ export class Game {
     return null;
   }
 
-  resize(account: Account, mat: Rect): string | null {
-    if (!account.mat || !account.home) return NO_MAT;
-    const reason = validateMat(
-      mat,
-      account.home,
-      allowanceFor(account.smoothedLive).matArea,
-      this.otherMats(account.id),
-      this.board.width,
-      this.board.height,
-    );
-    if (reason) return reason;
-    account.mat = { x: mat.x, y: mat.y, w: mat.w, h: mat.h };
-    return null;
-  }
-
   free(account: Account): void {
     account.mat = null;
     account.home = null;
@@ -136,12 +125,18 @@ export class Game {
   }
 
   status(account: Account): PlayerStatus {
-    const { matArea, inventoryCap } = allowanceFor(account.smoothedLive);
+    const { inventoryCap } = allowanceFor(account.smoothedLive);
+    const side = account.mat?.w ?? 0;
     return {
       id: account.id,
       inventory: Math.floor(account.inventory),
       inventoryCap,
-      matArea,
+      inventoryProgress: inventoryProgress(account.inventory, inventoryCap),
+      matProgress: account.mat
+        ? matGrowthProgress(account.smoothedLive, side)
+        : 0,
+      matBlocked:
+        account.mat !== null && matSideFor(account.smoothedLive) > side,
       liveCells: account.liveCells,
       home: account.home,
       mat: account.mat,
@@ -155,13 +150,15 @@ export class Game {
   private place(account: Account, cells: [number, number][]): string | null {
     const { mat } = account;
     if (!mat) return NO_MAT;
+    const { width, height } = this.board;
 
     const squares = new Set<number>();
     for (const [x, y] of cells) {
-      if (!rectContains(mat, { x, y })) {
+      const square = { x: mod(x, width), y: mod(y, height) };
+      if (!matContains(mat, square, width, height)) {
         return "You can only place cells on your own mat.";
       }
-      squares.add(y * this.board.width + x);
+      squares.add(square.y * width + square.x);
     }
 
     const available = Math.floor(account.inventory);
@@ -181,6 +178,7 @@ export class Game {
   }
 
   private updateAccounts(): void {
+    const { width, height } = this.board;
     const counts = this.liveCounts;
     counts.fill(0);
     for (const color of this.board.cells) counts[color]++;
@@ -192,10 +190,17 @@ export class Game {
         account.liveCells,
         account.smoothedLive * LIVE_SMOOTHING_DECAY,
       );
-      if (!account.mat || !account.home) continue;
+      const { mat, home } = account;
+      if (!mat || !home) continue;
 
-      const { matArea, inventoryCap } = allowanceFor(account.smoothedLive);
-      account.mat = shrinkMat(account.mat, account.home, matArea);
+      const target = matSideFor(account.smoothedLive);
+      if (target !== mat.w) {
+        const others = target > mat.w ? this.otherMats(account.id) : [];
+        const side = growMat(home, mat.w, target, others, width, height);
+        if (side !== mat.w) account.mat = squareMat(home, side, width, height);
+      }
+
+      const { inventoryCap } = allowanceFor(account.smoothedLive);
       if (account.inventory < inventoryCap) {
         account.inventory = Math.min(inventoryCap, account.inventory + accrual);
       }

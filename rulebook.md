@@ -8,7 +8,7 @@ The world advances in **ticks**, one every `TICK_MS` = 100 ms (10 ticks per seco
 
 1. **Step** the board one generation (§3, §4).
 2. **Apply placements** that arrived since the last tick, in arrival order (§8).
-3. **Update players**: live cell counts, smoothing, allowances, mat shrinking and inventory accrual (§5–§7).
+3. **Update players**: live cell counts, smoothing, mat growth and shrinking, and inventory accrual (§5–§7, §9).
 4. **Broadcast** the new state to every connected client.
 
 `t` below is the board's generation number. Stepping turns generation `t` into generation `t + 1`.
@@ -16,7 +16,7 @@ The world advances in **ticks**, one every `TICK_MS` = 100 ms (10 ticks per seco
 ## 2. Board
 
 - `BOARD_SIZE` × `BOARD_SIZE` = 512 × 512 squares.
-- The board is a **torus**: the right edge neighbors the left edge and the top neighbors the bottom.
+- The board is a **torus**: the right edge neighbors the left edge and the top neighbors the bottom. This applies to cells and to mats.
 - Each square is either **dead** or **alive with a color**. A color is a player's account id (1 to 65 535).
 - The board starts empty.
 
@@ -56,24 +56,26 @@ L_p(t) = number of squares with color p
 S_p(t) = max( L_p(t), S_p(t−1) · LIVE_SMOOTHING_DECAY )      S_p = 0 for a new account
 ```
 
-With `LIVE_SMOOTHING_DECAY` = 0.995, `S` rises immediately when a player gains cells and falls by 0.5% per tick when they lose them. The half-life is `ln 0.5 / ln 0.995` ≈ 138 ticks ≈ 13.8 s. Both allowances below use `S`, not `L`, so oscillators and short losses don't make them jitter.
+With `LIVE_SMOOTHING_DECAY` = 0.995, `S` rises immediately when a player gains cells and falls by 0.5% per tick when they lose them. The half-life is `ln 0.5 / ln 0.995` ≈ 138 ticks ≈ 13.8 s. The allowances below use `S`, not `L`, so oscillators and short losses don't make them jitter.
 
 ## 6. Allowances
 
 ```
 Mat area allowance   A_p = floor( BASE_MAT_SIDE² + MAT_AREA_PER_LIVE_CELL · S_p )       = floor(64 + 2 · S_p)
+Mat side allowance   s*_p = floor( √A_p )
 Inventory cap        C_p = floor( BASE_INVENTORY_CAP + INVENTORY_CAP_PER_LIVE_CELL · S_p ) = floor(12 + 0.1 · S_p)
 ```
 
-| Smoothed live cells `S` | Mat allowance `A` | Inventory cap `C` |
-| ----------------------- | ----------------- | ----------------- |
-| 0                       | 64 (8 × 8)        | 12                |
-| 50                      | 164               | 17                |
-| 150                     | 364               | 27                |
-| 240                     | 544               | 36                |
-| 450                     | 964               | 57                |
+| Smoothed live cells `S` | Mat area `A` | Mat side `s*` | Inventory cap `C` |
+| ----------------------- | ------------ | ------------- | ----------------- |
+| 0                       | 64           | 8             | 12                |
+| 8.5                     | 81           | 9             | 12                |
+| 50                      | 164          | 12            | 17                |
+| 150                     | 364          | 19            | 27                |
+| 240                     | 544          | 23            | 36                |
+| 616                     | 1296         | 36            | 73                |
 
-**Example milestone:** a Gosper glider gun has 36 cells and a 36 × 9 bounding box. Because of the proportions rule (§9) it needs a mat of at least 36 × 12 = 432 squares, so `A ≥ 432` requires `S ≥ 184`. Placing it in one group needs `C ≥ 36`, which requires `S ≥ 240`.
+**Example milestone:** a Gosper glider gun has 36 cells and a 36 × 9 bounding box. It needs a mat side of at least 36, so `A ≥ 1296`, which requires `S ≥ 616`. Placing it in one group needs `C ≥ 36`, which requires `S ≥ 240`.
 
 ## 7. Inventory
 
@@ -87,15 +89,16 @@ Inventory cap        C_p = floor( BASE_INVENTORY_CAP + INVENTORY_CAP_PER_LIVE_CE
   If `I ≥ C` (for example after `C` dropped), `I` stays where it is: it is never reduced, it just stops growing.
 
 - Placing `n` cells sets `I = I − n`. Only whole cells can be placed: the usable amount is `floor(I)`.
+- **Indicator:** the inventory ring shows the progress toward the next whole cell, `I − floor(I)`, and is full while `I ≥ C`.
 
 ## 8. Placement
 
-Players stage squares on their own screen, then commit them as one **group** of at most `MAX_CELLS_PER_PLACE` = 256 squares. Squares repeated in a group count once.
+Players stage squares on their own screen, then commit them as one **group** of at most `MAX_CELLS_PER_PLACE` = 256 squares. Coordinates wrap around the board, and squares repeated in a group count once.
 
 A group is applied at step 2 of the next tick, after the board has stepped, and is **accepted only if all** of these hold at that moment:
 
 1. The player has a mat.
-2. Every square is inside the player's own mat.
+2. Every square is inside the player's own mat (§9).
 3. `1 ≤ n ≤ floor(I)`, where `n` is the number of distinct squares.
 4. Every square is dead.
 
@@ -107,40 +110,45 @@ A mat is the only area where its owner may place cells. It limits placement only
 
 ### Shape
 
-A mat is a rectangle `(x, y, w, h)` covering columns `x … x+w−1` and rows `y … y+h−1`. A mat never wraps across the board edge. It is valid for player `p` when:
+A mat is a square of side `s`, centered on the player's home square `(hx, hy)`:
 
-| Rule         | Condition                                                    |
-| ------------ | ------------------------------------------------------------ |
-| On the board | `x ≥ 0`, `y ≥ 0`, `x + w ≤ BOARD_SIZE`, `y + h ≤ BOARD_SIZE` |
-| Minimum side | `w ≥ MAT_MIN_SIDE` and `h ≥ MAT_MIN_SIDE` (4)                |
-| Proportions  | `max(w, h) ≤ MAT_MAX_ASPECT · min(w, h)` (3)                 |
-| Size         | `w · h ≤ A_p`                                                |
-| Anchored     | contains the player's home square                            |
-| Gap          | at least `MAT_GAP` = 3 free squares from every other mat     |
+```
+x = (hx − floor(s / 2)) mod BOARD_SIZE
+y = (hy − floor(s / 2)) mod BOARD_SIZE
+```
 
-**Gap, exactly:** two mats are too close when their column ranges come within 3 squares of each other **and** their row ranges do too, measured around the torus. Ranges `[x₁−3, x₁+w₁+3)` and `[x₂, x₂+w₂)` overlap on a ring of size `BOARD_SIZE`, and likewise for rows. So mats that are near each other only diagonally are also too close.
+It covers the `s × s` squares starting at `(x, y)` and wraps across the board edges. A square `(px, py)` is inside when `(px − x) mod BOARD_SIZE < s` and `(py − y) mod BOARD_SIZE < s`.
+
+Because `floor(s / 2)` only changes when `s` becomes even, growing by one square adds a column on the right and a row at the bottom when the new side is odd, and a column on the left and a row at the top when it's even. The mat stays centered on home to within half a square.
+
+**Gap:** mats must stay at least `MAT_GAP` = 3 free squares apart. Exactly: two mats are too close when their column ranges come within 3 squares of each other **and** their row ranges do too, measured around the torus. Ranges `[x₁−3, x₁+s₁+3)` and `[x₂, x₂+s₂)` overlap on a ring of size `BOARD_SIZE`, and likewise for rows. So mats that are near each other only diagonally are also too close.
 
 ### Joining
 
 Joining gives a player a `BASE_MAT_SIDE` × `BASE_MAT_SIDE` (8 × 8) mat:
 
-- Candidates are the 8 × 8 positions that satisfy the gap rule and whose `x` and `y` are both multiples of `MAT_SPOT_STRIDE` = 8. If there are none, every position that satisfies the gap rule is a candidate.
+- Candidates are the positions `(x, y)` where an 8 × 8 mat satisfies the gap rule and both `x` and `y` are multiples of `MAT_SPOT_STRIDE` = 8. If there are none, every position that satisfies the gap rule is a candidate.
 - **Empty board:** pick the candidate whose center is closest to the board's center.
 - **Otherwise:** pick the candidate whose center is farthest from the nearest other mat's center (Euclidean distance on the torus).
 - Ties go to the first candidate in scan order (top row first, left to right).
-- The **home square** is `(x + 4, y + 4)`.
+- The **home square** is `((x + 4) mod BOARD_SIZE, (y + 4) mod BOARD_SIZE)`.
 - If there is no candidate, joining fails until space frees up.
 
-### Resizing
+### Growing and shrinking
 
-The player proposes any rectangle, and it is accepted if it satisfies every shape rule with the current `A_p`. A mat never moves away from its home square and never grows on its own.
+At step 3 of every tick, players are updated in order of account id. For a mat of side `s` with side allowance `s*_p` (§6):
 
-### Shrinking
+- If `s*_p < s`, the mat **shrinks** to side `s*_p` at once.
+- If `s*_p > s`, the mat **grows** one square at a time toward `s*_p`, stopping before the first size that would break the gap rule with another mat. Its side never exceeds `BOARD_SIZE`. A blocked mat keeps its allowance and grows as soon as there's room.
+- Shrinking never removes cells; only the area where the owner can place changes.
 
-At step 3 of every tick, while `w · h > A_p`:
+**Indicator:** the mat ring shows the progress from the current side toward the next one, using the unfloored allowance so it moves smoothly:
 
-- Shrink the **longer** side (width if they are equal). If that side is already at `MAT_MIN_SIDE`, shrink the other side instead.
-- Remove the edge column or row that is **farther from home**. If home is equally far from both edges, remove the right column or the bottom row.
+```
+progress = clamp( (BASE_MAT_SIDE² + MAT_AREA_PER_LIVE_CELL · S_p − s²) / (2s + 1), 0, 1 )
+```
+
+The ring turns amber while the mat is blocked, meaning `s*_p > s` after this tick's growth.
 
 ## 10. Accounts
 
@@ -165,14 +173,12 @@ What a player's screen may show. For now the client applies these limits; the se
 | `BOARD_SIZE`                  | 512     | §2, §9  |
 | `LIVE_SMOOTHING_DECAY`        | 0.995   | §5      |
 | `BASE_MAT_SIDE`               | 8       | §6, §9  |
-| `MAT_AREA_PER_LIVE_CELL`      | 2       | §6      |
+| `MAT_AREA_PER_LIVE_CELL`      | 2       | §6, §9  |
 | `BASE_INVENTORY_CAP`          | 12      | §6      |
 | `INVENTORY_CAP_PER_LIVE_CELL` | 0.1     | §6      |
 | `STARTING_INVENTORY`          | 12      | §7      |
 | `ACCRUAL_MS`                  | 4000 ms | §7      |
 | `MAX_CELLS_PER_PLACE`         | 256     | §8      |
-| `MAT_MIN_SIDE`                | 4       | §9      |
-| `MAT_MAX_ASPECT`              | 3       | §9      |
 | `MAT_GAP`                     | 3       | §9      |
 | `MAT_SPOT_STRIDE`             | 8       | §9      |
 | `MAX_ACCOUNTS`                | 65 535  | §2, §10 |
