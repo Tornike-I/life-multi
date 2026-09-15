@@ -219,6 +219,7 @@ dialog h2 {
 .dialog-actions {
   display: flex;
   justify-content: flex-end;
+  gap: 8px;
   margin-top: 12px;
 }
 
@@ -251,4 +252,70 @@ dialog h2 {
 
 #mat-stat.blocked .ring-fill {
   stroke: #f59e0b;
+}
+
+#tutorial {
+  width: min(900px, calc(100vw - 32px));
+}
+
+.tutorial-body {
+  display: grid;
+  gap: 16px;
+}
+
+@media (min-width: 760px) {
+  .tutorial-body {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+}
+
+#tutorial-canvas {
+  display: block;
+  width: min(432px, 100%);
+  height: auto;
+  border: 1px solid #1f2937;
+  border-radius: 6px;
+  cursor: crosshair;
+  touch-action: none;
+}
+
+#tutorial-patterns button[aria-pressed="true"] {
+  border-color: #4ade80;
+}
+
+.tutorial-text p {
+  margin: 0 0 8px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+#tutorial-tasks {
+  display: grid;
+  gap: 6px;
+  margin: 12px 0;
+  padding: 0;
+  font-size: 14px;
+  list-style: none;
+}
+
+#tutorial-tasks li::before {
+  content: "○ ";
+  color: #9ca3af;
+}
+
+#tutorial-tasks li.done::before {
+  content: "✓ ";
+  color: #4ade80;
+}
+
+.tutorial-stats {
+  display: grid;
+  gap: 4px;
+  margin: 12px 0;
+  font-family: ui-monospace, monospace;
+  font-size: 13px;
+}
+
+.tutorial-text .hint {
+  text-align: left;
 }

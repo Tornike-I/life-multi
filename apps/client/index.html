@@ -10,6 +10,7 @@
       <span id="you"></span>
       <span id="status">connecting…</span>
       <span id="generation"></span>
+      <button id="tutorial-open" type="button">Tutorial</button>
     </header>
     <main class="stage">
       <canvas id="board"></canvas>
@@ -83,6 +84,33 @@
       <form method="dialog" class="dialog-actions">
         <button>Close</button>
       </form>
+    </dialog>
+    <dialog id="tutorial">
+      <div class="tutorial-body">
+        <div class="tutorial-board">
+          <canvas id="tutorial-canvas"></canvas>
+          <div id="tutorial-simulation" class="editor-tools">
+            <button id="tutorial-play" type="button">Pause</button>
+            <button id="tutorial-step" type="button">Step</button>
+            <button id="tutorial-reset" type="button">Reset</button>
+            <span id="tutorial-generation" class="meta"></span>
+          </div>
+          <div id="tutorial-patterns" class="editor-tools"></div>
+        </div>
+        <section class="tutorial-text">
+          <p id="tutorial-progress" class="meta"></p>
+          <h2 id="tutorial-title"></h2>
+          <div id="tutorial-copy"></div>
+          <ul id="tutorial-tasks"></ul>
+          <div id="tutorial-stats" class="tutorial-stats" hidden></div>
+          <p id="tutorial-message" class="hint"></p>
+        </section>
+      </div>
+      <div class="dialog-actions">
+        <button id="tutorial-close" type="button">Close</button>
+        <button id="tutorial-back" type="button">Back</button>
+        <button id="tutorial-next" type="button">Next</button>
+      </div>
     </dialog>
     <p id="message" class="hint">
       Wheel to zoom, right-drag or WASD to pan. Select empty squares on your

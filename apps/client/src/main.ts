@@ -21,6 +21,7 @@ import {
 import { type ChosenBlueprint, createLibrary } from "./library.ts";
 import { drawMinimap, type MinimapLayout } from "./minimap.ts";
 import { colorFor, draw, type StampSquare } from "./render.ts";
+import { createTutorial } from "./tutorial.ts";
 import "./style.css";
 
 const KEY_STORAGE = "life-multi:key";
@@ -68,6 +69,7 @@ const clearButton = element<HTMLButtonElement>("clear");
 const homeButton = element<HTMLButtonElement>("home");
 const blueprintsButton = element<HTMLButtonElement>("blueprints-open");
 const stampCancelButton = element<HTMLButtonElement>("stamp-cancel");
+const tutorialButton = element<HTMLButtonElement>("tutorial-open");
 const messageEl = element("message");
 
 type Drag =
@@ -94,6 +96,11 @@ const library = createLibrary(
   () => (accountId === null ? "#e5e7eb" : colorFor(accountId)),
   startStamping,
 );
+
+const tutorial = createTutorial({
+  hasAccount: () => accountId !== null,
+  onJoin: () => send({ type: "join" }),
+});
 
 function loadKey(): string | null {
   try {
@@ -517,7 +524,11 @@ minimap.addEventListener("pointermove", (event) => {
   if (event.buttons & 1) jumpFromMinimap(event);
 });
 
-joinButton.addEventListener("click", () => send({ type: "join" }));
+joinButton.addEventListener("click", () => {
+  if (accountId === null) tutorial.open(true);
+  else send({ type: "join" });
+});
+tutorialButton.addEventListener("click", () => tutorial.open(false));
 placeButton.addEventListener("click", commit);
 homeButton.addEventListener("click", centerOnMat);
 blueprintsButton.addEventListener("click", () => library.open());
@@ -533,7 +544,7 @@ clearButton.addEventListener("click", () => {
 });
 
 window.addEventListener("keydown", (event) => {
-  if (library.dialog.open) return;
+  if (library.dialog.open || tutorial.dialog.open) return;
   const key = event.key.toLowerCase();
   if (key === "enter") {
     commit();
