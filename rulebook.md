@@ -163,7 +163,7 @@ The ring turns amber while the mat is blocked, meaning `s*_p > s` after this tic
 What a player's screen may show. For now the client applies these limits; the server still sends the whole board, so they aren't enforced yet.
 
 - **Camera:** it can be moved anywhere. The board is a torus, so panning past an edge shows the other side again.
-- **Zoom** is measured in squares across the longer side of the board view. It ranges from `MAX_VIEW_SQUARES` = 128 (most zoomed out) to `MIN_VIEW_SQUARES` = 12 (most zoomed in). The camera starts at `DEFAULT_VIEW_SQUARES` = 48 centered on the board, and jumps to the player's mat when they get one.
+- **Zoom** is measured in squares across the longer side of the board view. It ranges from `MAX_VIEW_SQUARES` = 128 (most zoomed out) to `MIN_VIEW_SQUARES` = 12 (most zoomed in). The camera starts at `DEFAULT_VIEW_SQUARES` = 48 centered on the board, and jumps to the player's mat when they get one. On touch screens it uses `TOUCH_VIEW_SQUARES` = 24 instead, so squares are big enough to tap.
 - **Minimap:** it covers the player's own territory: the smallest rectangle on the torus that contains their mat and every live cell of their color. It's measured over the last `MINIMAP_HISTORY_TICKS` = 50 board updates the player's client received (5 s): a square counts if it held the mat or one of their cells in any of them. Something oscillating at the edge therefore can't make the minimap grow and shrink, and after a real loss it shrinks once those squares have been empty for the whole window. Columns and rows are measured separately, each span being everything outside the longest run of columns (rows) with none of those squares. Each span is padded by `MINIMAP_PADDING` = 16 squares on both sides and widened to at least `MINIMAP_MIN_SQUARES` = 64, but never beyond the board. Inside that area the minimap shows every live cell in its owner's color, including other players' cells, plus the player's mat and the camera's view. Clicking it moves the camera there.
 
 ## Constants
@@ -187,6 +187,7 @@ What a player's screen may show. For now the client applies these limits; the se
 | `MAX_VIEW_SQUARES`            | 128     | §11     |
 | `MIN_VIEW_SQUARES`            | 12      | §11     |
 | `DEFAULT_VIEW_SQUARES`        | 48      | §11     |
+| `TOUCH_VIEW_SQUARES`          | 24      | §11     |
 | `MINIMAP_PADDING`             | 16      | §11     |
 | `MINIMAP_MIN_SQUARES`         | 64      | §11     |
 | `MINIMAP_HISTORY_TICKS`       | 50      | §11     |
