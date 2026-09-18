@@ -24,8 +24,11 @@ function longestSide(viewport: Viewport): number {
   return Math.max(viewport.width, viewport.height, 1);
 }
 
-export function defaultZoom(viewport: Viewport): number {
-  return longestSide(viewport) / DEFAULT_VIEW_SQUARES;
+export function defaultZoom(
+  viewport: Viewport,
+  squares = DEFAULT_VIEW_SQUARES,
+): number {
+  return longestSide(viewport) / squares;
 }
 
 export function clampZoom(zoom: number, viewport: Viewport): number {
@@ -70,4 +73,22 @@ export function dragBy(camera: Camera, dx: number, dy: number): Camera {
     x: camera.x - dx / camera.zoom,
     y: camera.y - dy / camera.zoom,
   };
+}
+
+export function pinchBy(
+  camera: Camera,
+  viewport: Viewport,
+  from: [Point, Point],
+  to: [Point, Point],
+): Camera {
+  const middle = ([a, b]: [Point, Point]): Point => ({
+    x: (a.x + b.x) / 2,
+    y: (a.y + b.y) / 2,
+  });
+  const spread = ([a, b]: [Point, Point]): number =>
+    Math.max(1, Math.hypot(a.x - b.x, a.y - b.y));
+  const start = middle(from);
+  const end = middle(to);
+  const panned = dragBy(camera, end.x - start.x, end.y - start.y);
+  return zoomAt(panned, viewport, end.x, end.y, spread(to) / spread(from));
 }

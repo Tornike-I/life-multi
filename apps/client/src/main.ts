@@ -1,11 +1,13 @@
 import {
   type ClientMessage,
   DEAD,
+  DEFAULT_VIEW_SQUARES,
   matContains,
   type Point,
   type ResultMessage,
   type ServerMessage,
   type StateMessage,
+  TOUCH_VIEW_SQUARES,
 } from "@life-multi/shared";
 import { bounds, type Cell, flip, rotate } from "./blueprints.ts";
 import {
@@ -14,6 +16,7 @@ import {
   defaultZoom,
   dragBy,
   mod,
+  pinchBy,
   screenToWorld,
   type Viewport,
   zoomAt,
@@ -25,7 +28,12 @@ import { createTutorial } from "./tutorial.ts";
 import "./style.css";
 
 const KEY_STORAGE = "life-multi:key";
+// Must match #minimap's size in style.css.
 const MINIMAP_PX = 180;
+const MINIMAP_COMPACT_PX = 112;
+const TAP_SLOP_PX = 10;
+const TOUCH_HINT =
+  "Pinch to zoom, drag to pan. Tap squares on your mat, then press Place.";
 const PAN_STEP_PX = 80;
 const WHEEL_ZOOM_SPEED = 0.0015;
 const KEY_ZOOM_FACTOR = 1.25;
@@ -69,6 +77,8 @@ const clearButton = element<HTMLButtonElement>("clear");
 const homeButton = element<HTMLButtonElement>("home");
 const blueprintsButton = element<HTMLButtonElement>("blueprints-open");
 const stampCancelButton = element<HTMLButtonElement>("stamp-cancel");
+const stampRotateButton = element<HTMLButtonElement>("stamp-rotate");
+const stampFlipButton = element<HTMLButtonElement>("stamp-flip");
 const tutorialButton = element<HTMLButtonElement>("tutorial-open");
 const messageEl = element("message");
 
@@ -91,6 +101,11 @@ let minimapLayout: MinimapLayout | null = null;
 let renderQueued = false;
 let stamp: ChosenBlueprint | null = null;
 let hover: Point | null = null;
+let tapStart: Point | null = null;
+const touches = new Map<number, Point>();
+const coarsePointer = matchMedia("(pointer: coarse)").matches;
+const compactLayout = matchMedia("(max-width: 600px)");
+const viewSquares = coarsePointer ? TOUCH_VIEW_SQUARES : DEFAULT_VIEW_SQUARES;
 
 const library = createLibrary(
   () => (accountId === null ? "#e5e7eb" : colorFor(accountId)),
@@ -166,7 +181,7 @@ function handle(message: ServerMessage): void {
         camera = {
           x: message.width / 2,
           y: message.height / 2,
-          zoom: defaultZoom(viewport),
+          zoom: defaultZoom(viewport, viewSquares),
         };
       }
       if (!message.you?.mat) {
@@ -198,7 +213,7 @@ function centerOnMat(): void {
   camera = {
     x: mat.x + mat.w / 2,
     y: mat.y + mat.h / 2,
-    zoom: clampZoom(defaultZoom(viewport), viewport),
+    zoom: clampZoom(defaultZoom(viewport, viewSquares), viewport),
   };
   scheduleRender();
 }
@@ -254,6 +269,8 @@ function updateHud(): void {
     : `Grows to ${mat.w + 1}×${mat.h + 1} when the ring fills.`;
   aliveEl.textContent = `alive ${you.liveCells}`;
   stampCancelButton.hidden = stamp === null;
+  stampRotateButton.hidden = stamp === null;
+  stampFlipButton.hidden = stamp === null;
   placeButton.textContent = `Place ${staged.size}`;
   placeButton.disabled =
     staged.size === 0 || staged.size > you.inventory || blocked;
@@ -279,7 +296,7 @@ function stampSquares(): StampSquare[] | null {
 function stampHint(): string {
   if (!stamp) return "";
   const inventory = state?.you?.inventory ?? 0;
-  return `${stamp.name}: ${stamp.cells.length} cells (you have ${inventory}). Click to select it, R rotate, F flip, Esc or Cancel blueprint to stop.`;
+  return `${stamp.name}: ${stamp.cells.length} cells (you have ${inventory}). Tap or click to select it. Rotate (R) and Flip (F) turn it.`;
 }
 
 function startStamping(blueprint: ChosenBlueprint): void {
@@ -309,7 +326,7 @@ function stampHere(): void {
     return;
   }
   for (const { index } of squares) staged.add(index);
-  messageEl.textContent = `Selected ${stamp!.name}. Press Place, or click to select another.`;
+  messageEl.textContent = `Selected ${stamp!.name}. Press Place, or tap to select another.`;
   refresh();
 }
 
@@ -340,12 +357,13 @@ function render(): void {
   if (accountId === null) {
     minimapLayout = null;
   } else {
-    const backing = Math.round(MINIMAP_PX * dpr);
+    const size = compactLayout.matches ? MINIMAP_COMPACT_PX : MINIMAP_PX;
+    const backing = Math.round(size * dpr);
     if (minimap.width !== backing) {
       minimap.width = backing;
       minimap.height = backing;
     }
-    minimapLayout = drawMinimap(minimapCtx, MINIMAP_PX, dpr, {
+    minimapLayout = drawMinimap(minimapCtx, size, dpr, {
       state,
       cells,
       accountId,
@@ -408,6 +426,66 @@ function commit(): void {
   refresh();
 }
 
+function tap(event: PointerEvent): void {
+  const world = worldSquareAt(event);
+  if (!state || !state.you?.mat || !world) return;
+  if (stamp) {
+    hover = world;
+    stampHere();
+    return;
+  }
+  const square = boardSquare(world, state);
+  if (!onOwnMat(square)) return;
+  const index = square.y * state.width + square.x;
+  if (staged.has(index)) staged.delete(index);
+  else staged.add(index);
+  refresh();
+}
+
+function touchStart(event: PointerEvent): void {
+  const point = { x: event.clientX, y: event.clientY };
+  tapStart = touches.size === 0 ? point : null;
+  touches.set(event.pointerId, point);
+  canvas.setPointerCapture(event.pointerId);
+}
+
+function touchMove(event: PointerEvent): void {
+  const last = touches.get(event.pointerId);
+  if (!last || !camera) return;
+  const next = { x: event.clientX, y: event.clientY };
+  if (tapStart) {
+    if (Math.hypot(next.x - tapStart.x, next.y - tapStart.y) < TAP_SLOP_PX) {
+      return;
+    }
+    tapStart = null;
+  }
+  const other = [...touches].find(([id]) => id !== event.pointerId)?.[1];
+  if (other) {
+    const bounds = canvas.getBoundingClientRect();
+    const local = (point: Point): Point => ({
+      x: point.x - bounds.left,
+      y: point.y - bounds.top,
+    });
+    camera = pinchBy(
+      camera,
+      viewport,
+      [local(last), local(other)],
+      [local(next), local(other)],
+    );
+  } else {
+    camera = dragBy(camera, next.x - last.x, next.y - last.y);
+  }
+  touches.set(event.pointerId, next);
+  scheduleRender();
+}
+
+function touchEnd(event: PointerEvent): void {
+  touches.delete(event.pointerId);
+  if (touches.size > 0) return;
+  if (tapStart) tap(event);
+  tapStart = null;
+}
+
 new ResizeObserver(measureViewport).observe(canvas);
 
 canvas.addEventListener("contextmenu", (event) => event.preventDefault());
@@ -417,6 +495,10 @@ canvas.addEventListener("mousedown", (event) => {
 });
 
 canvas.addEventListener("pointerdown", (event) => {
+  if (event.pointerType === "touch") {
+    touchStart(event);
+    return;
+  }
   if (event.button === 1 || event.button === 2) {
     drag = { kind: "pan", lastX: event.clientX, lastY: event.clientY };
     canvas.setPointerCapture(event.pointerId);
@@ -444,6 +526,10 @@ canvas.addEventListener("pointerdown", (event) => {
 });
 
 canvas.addEventListener("pointermove", (event) => {
+  if (event.pointerType === "touch") {
+    touchMove(event);
+    return;
+  }
   if (stamp) {
     hover = worldSquareAt(event);
     scheduleRender();
@@ -469,18 +555,24 @@ canvas.addEventListener("pointermove", (event) => {
   refresh();
 });
 
-canvas.addEventListener("pointerleave", () => {
-  if (!stamp) return;
+canvas.addEventListener("pointerleave", (event) => {
+  if (!stamp || event.pointerType === "touch") return;
   hover = null;
   scheduleRender();
 });
 
-canvas.addEventListener("pointerup", () => {
+canvas.addEventListener("pointerup", (event) => {
+  if (event.pointerType === "touch") {
+    touchEnd(event);
+    return;
+  }
   drag = null;
   refresh();
 });
 
-canvas.addEventListener("pointercancel", () => {
+canvas.addEventListener("pointercancel", (event) => {
+  touches.delete(event.pointerId);
+  tapStart = null;
   drag = null;
   refresh();
 });
@@ -538,6 +630,9 @@ stampCancelButton.addEventListener("click", () => {
   refresh();
 });
 
+stampRotateButton.addEventListener("click", () => transformStamp(rotate));
+stampFlipButton.addEventListener("click", () => transformStamp(flip));
+
 clearButton.addEventListener("click", () => {
   staged.clear();
   refresh();
@@ -577,4 +672,5 @@ window.addEventListener("keydown", (event) => {
   }
 });
 
+if (coarsePointer) messageEl.textContent = TOUCH_HINT;
 connect();

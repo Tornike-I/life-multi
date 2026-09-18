@@ -18,6 +18,7 @@ export const LIVE_PEAK_TICKS = 30;
 
 export const MAX_VIEW_SQUARES = 128;
 export const DEFAULT_VIEW_SQUARES = 48;
+export const TOUCH_VIEW_SQUARES = 24;
 export const MIN_VIEW_SQUARES = 12;
 export const MINIMAP_PADDING = 16;
 export const MINIMAP_MIN_SQUARES = 64;

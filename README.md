@@ -14,19 +14,19 @@ The full rules and every formula are in **[rulebook.md](rulebook.md)**.
 
 ### Controls
 
-| Action           | Input                                                                |
-| ---------------- | -------------------------------------------------------------------- |
-| Tutorial         | Offered when you first click **Join**, or **Tutorial** at the top    |
-| Zoom             | Mouse wheel, or `+` / `-`                                            |
-| Pan              | Right or middle drag, or WASD / arrow keys                           |
-| Jump to your mat | **My mat** or `H`                                                    |
-| Minimap          | Click or drag it to move the camera                                  |
-| Select squares   | Left click or drag on your mat                                       |
-| Place selection  | **Place** or Enter                                                   |
-| Clear selection  | **Clear** or Esc                                                     |
-| Blueprints       | **Blueprints** opens the library and editor; **Use** one to stamp it |
-| Stamp            | Click to select its squares, `R` rotate, `F` flip                    |
-| Stop stamping    | **Cancel blueprint** or Esc                                          |
+| Action           | Input                                                                  |
+| ---------------- | ---------------------------------------------------------------------- |
+| Tutorial         | Offered when you first click **Join**, or **Tutorial** at the top      |
+| Zoom             | Mouse wheel, `+` / `-`, or pinch                                       |
+| Pan              | Right or middle drag, WASD / arrow keys, or one-finger drag            |
+| Jump to your mat | **My mat** or `H`                                                      |
+| Minimap          | Click or drag it to move the camera                                    |
+| Select squares   | Left click or drag on your mat, or tap squares                         |
+| Place selection  | **Place** or Enter                                                     |
+| Clear selection  | **Clear** or Esc                                                       |
+| Blueprints       | **Blueprints** opens the library and editor; **Use** one to stamp it   |
+| Stamp            | Click or tap to select its squares; **Rotate** or `R`, **Flip** or `F` |
+| Stop stamping    | **Cancel blueprint** or Esc                                            |
 
 ## Stack
 

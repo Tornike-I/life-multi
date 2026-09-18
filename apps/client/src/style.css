@@ -13,6 +13,7 @@ body {
   padding-inline: 16px;
   padding-block: 12px;
   height: 100vh;
+  height: 100dvh;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto auto;
   gap: 10px;
@@ -100,6 +101,7 @@ button {
   background: #111827;
   color: inherit;
   cursor: pointer;
+  touch-action: manipulation;
 }
 
 button:disabled {
@@ -318,4 +320,27 @@ dialog h2 {
 
 .tutorial-text .hint {
   text-align: left;
+}
+
+@media (pointer: coarse) {
+  button {
+    min-height: 40px;
+    padding-inline: 14px;
+  }
+}
+
+@media (max-width: 600px) {
+  body {
+    padding-inline: 8px;
+    padding-block: 8px;
+    gap: 8px;
+  }
+
+  /* Size must match MINIMAP_COMPACT_PX in main.ts. */
+  #minimap {
+    right: 8px;
+    bottom: 8px;
+    width: 112px;
+    height: 112px;
+  }
 }
