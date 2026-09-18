@@ -1,14 +1,9 @@
 import {
-  allowanceFor,
-  BASE_INVENTORY_CAP,
   BASE_MAT_SIDE,
   type Board,
   createBoard,
   DEAD,
   getCell,
-  INVENTORY_CAP_PER_LIVE_CELL,
-  LIVE_PEAK_TICKS,
-  MAT_AREA_PER_LIVE_CELL,
   matContains,
   matSideFor,
   mod,
@@ -20,7 +15,6 @@ import {
   squareMat,
   STARTING_INVENTORY,
   step,
-  TICK_MS,
 } from "@life-multi/shared";
 import { bounds, BUILT_IN, type Cell } from "./blueprints.ts";
 import { colorFor } from "./render.ts";
@@ -105,8 +99,8 @@ const CHAPTERS: Chapter[] = [
   {
     title: "Welcome to life-multi",
     paragraphs: [
-      "life-multi is Conway's Game of Life for many players on one shared board that never stops.",
-      "This short tutorial shows how cells behave, how colors work and how your territory grows. Nothing you do here affects the real game.",
+      "Conway's Game of Life, shared by everyone on one board that never stops.",
+      "This practice board doesn't affect the real game.",
     ],
     tasks: [],
     patterns: [],
@@ -122,13 +116,10 @@ const CHAPTERS: Chapter[] = [
   {
     title: "How cells live and die",
     paragraphs: [
-      "The board is a grid of squares. Each square is empty or holds a live cell, and its neighbors are the 8 squares around it.",
-      "Every generation, all squares update at once. An empty square with exactly 3 live neighbors comes alive. A live cell with 2 or 3 live neighbors survives. Every other cell dies, from loneliness or overcrowding.",
-      "The block on the left never changes. The line on the right flips between horizontal and vertical. Press Step to watch one generation at a time.",
+      "An empty square with exactly 3 live neighbors comes alive. A cell with 2 or 3 neighbors survives. The rest die.",
+      "Press Step to watch.",
     ],
-    tasks: [
-      { label: "Advance 4 generations", check: (world) => world.steps >= 4 },
-    ],
+    tasks: [{ label: "Step 4 times", check: (world) => world.steps >= 4 }],
     patterns: [],
     playing: false,
     editable: false,
@@ -142,9 +133,8 @@ const CHAPTERS: Chapter[] = [
   {
     title: "Try some shapes",
     paragraphs: [
-      "Click empty squares to add cells and click cells to remove them, or pick a pattern below and click the board to drop it.",
-      "Shapes come in families. Still lifes never change, oscillators repeat in a loop, and spaceships travel. The board wraps around its edges, so a spaceship that leaves one side comes back on the other.",
-      "Each task looks at the whole board, so press Reset to clear it between tries.",
+      "Tap squares to add or remove cells, or pick a pattern and tap the board to drop it.",
+      "Still lifes never change, oscillators repeat, spaceships travel. Reset between tries.",
     ],
     tasks: [
       {
@@ -175,13 +165,12 @@ const CHAPTERS: Chapter[] = [
   {
     title: "Colors",
     paragraphs: [
-      "Every cell belongs to a player and has their color. A surviving cell keeps its color.",
-      "A newborn cell has exactly 3 live neighbors, its parents, and takes the color most of them share. If all three colors are different, one of them is picked at random.",
-      "Next to the marked square are one of your cells and one of another player's. Add one more of your cells next to the mark, then press Step so it's born in your color.",
+      "A newborn cell takes the color most of its 3 parents share.",
+      "Add one of your cells next to the mark, then press Step.",
     ],
     tasks: [
       {
-        label: "Make the marked square come alive in your color",
+        label: "Turn the marked square your color",
         check: (world) =>
           world.target !== null &&
           getCell(world.board, world.target.x, world.target.y) === PLAYER,
@@ -196,10 +185,8 @@ const CHAPTERS: Chapter[] = [
   {
     title: "Growing your territory",
     paragraphs: [
-      "You can only place cells on your mat, the square around your home, and each cell you place uses one from your inventory. Placed cells can't be taken back.",
-      "The more of your cells are alive, the more cells you can hold and the bigger your mat grows.",
-      `Your live cell count is smoothed. It uses your highest count from the last ${LIVE_PEAK_TICKS} ticks (${(LIVE_PEAK_TICKS * TICK_MS) / 1000} seconds in the real game), so a spaceship or oscillator whose cell count flickers doesn't make your mat jump. After a real loss it falls slowly. Try the lightweight spaceship: its count flickers between 9 and 12 while S holds at 12.`,
-      "In the real game you earn a cell every 4 seconds. Here you start with a full inventory: keep at least 9 cells alive to grow your mat.",
+      "You can only place cells on your mat, and each one uses a cell from your inventory.",
+      "The more of your cells stay alive, the bigger your mat grows. Keep 9 alive.",
     ],
     tasks: [
       {
@@ -225,9 +212,8 @@ const CHAPTERS: Chapter[] = [
   {
     title: "You're ready",
     paragraphs: [
-      "On the real board you get a mat of your own. Select empty squares on it and press Place to bring them to life, or open Blueprints to stamp bigger shapes.",
-      "The rings under the board show your next cell being earned and your mat's progress toward its next size. The minimap shows the area around your territory.",
-      "You can replay this tutorial any time from the Tutorial button at the top.",
+      "On the real board you get your own mat. Select squares on it and press Place.",
+      "Replay this any time from the Tutorial button.",
     ],
     tasks: [],
     patterns: [],
@@ -351,26 +337,11 @@ export function createTutorial(options: {
 
     statsEl.hidden = world.mat === null;
     if (world.mat) {
-      const live = world.smoothedLive;
-      const { matArea, inventoryCap } = allowanceFor(live);
-      const side = matSideFor(live);
+      const side = matSideFor(world.smoothedLive);
       statsEl.replaceChildren(
-        paragraph(
-          `Live cells now: ${liveCount(world.board)}, smoothed: S = ${live.toFixed(1)}`,
-          "div",
-        ),
-        paragraph(
-          `Inventory limit = ${BASE_INVENTORY_CAP} + ${INVENTORY_CAP_PER_LIVE_CELL} × S = ${inventoryCap}`,
-          "div",
-        ),
-        paragraph(
-          `Mat area = ${BASE_MAT_SIDE ** 2} + ${MAT_AREA_PER_LIVE_CELL} × S = ${matArea}, so the mat is ${side} × ${side}`,
-          "div",
-        ),
-        paragraph(
-          `Cells left to place: ${Math.floor(world.inventory ?? 0)}`,
-          "div",
-        ),
+        paragraph(`Alive: ${liveCount(world.board)}`, "div"),
+        paragraph(`Mat: ${side} × ${side}`, "div"),
+        paragraph(`Cells left: ${Math.floor(world.inventory ?? 0)}`, "div"),
       );
     }
   }
@@ -413,7 +384,7 @@ export function createTutorial(options: {
   function arm(id: string): void {
     armed = armed === id ? null : id;
     messageEl.textContent = armed
-      ? `Click the board to drop the ${blueprint(armed).name.toLowerCase()}.`
+      ? `Tap the board to drop the ${blueprint(armed).name.toLowerCase()}.`
       : "";
     renderControls();
     draw();
