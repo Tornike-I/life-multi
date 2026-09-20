@@ -11,6 +11,7 @@
       <span id="status">connecting…</span>
       <span id="generation"></span>
       <button id="tutorial-open" type="button">Tutorial</button>
+      <button id="leaderboard-open" type="button">Leaderboard</button>
     </header>
     <main class="stage">
       <canvas id="board"></canvas>
@@ -80,9 +81,47 @@
             <button id="editor-save" type="button">Save</button>
             <button id="editor-use" type="button">Use</button>
           </div>
+          <details class="rle">
+            <summary>Paste or copy RLE</summary>
+            <textarea
+              id="rle-text"
+              rows="4"
+              spellcheck="false"
+              autocapitalize="off"
+              autocorrect="off"
+              autocomplete="off"
+              placeholder="x = 3, y = 3, rule = B3/S23&#10;bo$2bo$3o!"
+            ></textarea>
+            <div class="editor-tools">
+              <button id="rle-paste" type="button" hidden>
+                Paste from clipboard
+              </button>
+              <button id="rle-import" type="button">Import</button>
+              <button id="rle-copy" type="button">Copy this drawing</button>
+            </div>
+          </details>
           <p id="editor-message" class="hint"></p>
         </section>
       </div>
+      <form method="dialog" class="dialog-actions">
+        <button>Close</button>
+      </form>
+    </dialog>
+    <dialog id="leaderboard">
+      <h2>Leaderboard</h2>
+      <ol id="leaderboard-list"></ol>
+      <p id="leaderboard-rank" class="meta"></p>
+      <form id="name-form" hidden>
+        <label for="player-name">Your name</label>
+        <input
+          id="player-name"
+          autocomplete="nickname"
+          enterkeyhint="done"
+          placeholder="unnamed"
+        />
+        <button type="submit">Save</button>
+      </form>
+      <p id="leaderboard-message" class="hint"></p>
       <form method="dialog" class="dialog-actions">
         <button>Close</button>
       </form>

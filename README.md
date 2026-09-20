@@ -10,6 +10,8 @@ Every player has a color and a square **mat**, the only area where they can plac
 
 New players are offered a short tutorial before their account is created: a small practice board, simulated in the browser, that walks through Conway's rules, a few shapes, colors, and how live cells grow the inventory and mat. It can be replayed from the **Tutorial** button.
 
+The **Leaderboard** ranks everyone by how many live cells of their color are on the board. Players can give themselves a name there; unnamed players show as `player <id>`.
+
 The full rules and every formula are in **[rulebook.md](rulebook.md)**.
 
 ### Controls
@@ -27,6 +29,8 @@ The full rules and every formula are in **[rulebook.md](rulebook.md)**.
 | Blueprints       | **Blueprints** opens the library and editor; **Use** one to stamp it   |
 | Stamp            | Click or tap to select its squares; **Rotate** or `R`, **Flip** or `F` |
 | Stop stamping    | **Cancel blueprint** or Esc                                            |
+| RLE patterns     | **Paste or copy RLE** in the blueprint editor, to import or export     |
+| Leaderboard      | **Leaderboard** at the top; set your name there                        |
 
 ## Stack
 
@@ -49,16 +53,16 @@ npm run dev
 
 Open http://localhost:5173. The Vite dev server proxies `/ws` to the game server on port 3001.
 
-| Command                      | Does                              |
-| ---------------------------- | --------------------------------- |
-| `npm run dev`                | Server and client with reload     |
-| `npm test`                   | Unit tests (Vitest)               |
-| `npm run lint`               | ESLint                            |
-| `npm run typecheck`          | `tsc` across all workspaces       |
-| `npm run format`             | Prettier                          |
-| `npm run build`              | Production build of the client    |
-| `npm run admin -- list`      | List accounts, last seen and mats |
-| `npm run admin -- free <id>` | Release an account's mat          |
+| Command                      | Does                                     |
+| ---------------------------- | ---------------------------------------- |
+| `npm run dev`                | Server and client with reload            |
+| `npm test`                   | Unit tests (Vitest)                      |
+| `npm run lint`               | ESLint                                   |
+| `npm run typecheck`          | `tsc` across all workspaces              |
+| `npm run format`             | Prettier                                 |
+| `npm run build`              | Production build of the client           |
+| `npm run admin -- list`      | List accounts, names, last seen and mats |
+| `npm run admin -- free <id>` | Release an account's mat                 |
 
 The server saves the board and accounts to `apps/server/data/life-multi.db` every few seconds. Set `DATABASE_PATH` to use a different file, and delete the file to start a fresh world.
 

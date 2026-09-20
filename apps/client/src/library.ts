@@ -12,6 +12,7 @@ import {
   rotate,
   saveAll,
 } from "./blueprints.ts";
+import { isLifeRule, MAX_RLE_INPUT, parseRle, toRle } from "./rle.ts";
 
 const EDITOR_CELL_PX = 14;
 
@@ -44,6 +45,8 @@ export function createLibrary(
   const nameInput = byId<HTMLInputElement>("blueprint-name");
   const countEl = byId("editor-count");
   const message = byId("editor-message");
+  const rleText = byId<HTMLTextAreaElement>("rle-text");
+  const rlePaste = byId<HTMLButtonElement>("rle-paste");
 
   let saved: Blueprint[] = [];
   let drawing = new Set<number>();
@@ -51,6 +54,7 @@ export function createLibrary(
   let paintAdd: boolean | null = null;
 
   nameInput.maxLength = MAX_NAME_LENGTH;
+  rleText.maxLength = MAX_RLE_INPUT;
   canvas.width = EDITOR_COLUMNS * EDITOR_CELL_PX;
   canvas.height = EDITOR_ROWS * EDITOR_CELL_PX;
 
@@ -198,6 +202,53 @@ export function createLibrary(
     renderList();
   }
 
+  function importRle(text: string): void {
+    const result = parseRle(text);
+    if (!result.ok) {
+      message.textContent = result.error;
+      return;
+    }
+    const { w, h } = bounds(result.cells);
+    if (!fitsEditor(result.cells)) {
+      message.textContent = `That pattern is ${w}×${h}; the editor is ${EDITOR_COLUMNS}×${EDITOR_ROWS}.`;
+      return;
+    }
+
+    setEditing(null);
+    if (result.name) nameInput.value = result.name.slice(0, MAX_NAME_LENGTH);
+    setDrawing(result.cells);
+    message.textContent =
+      result.rule !== null && !isLifeRule(result.rule)
+        ? `Imported ${result.cells.length} cells, but that pattern is written for rule ${result.rule}, not Life.`
+        : `Imported ${result.cells.length} cells.`;
+  }
+
+  async function pasteRle(): Promise<void> {
+    try {
+      rleText.value = await navigator.clipboard.readText();
+    } catch {
+      message.textContent = "Couldn't read the clipboard. Paste into the box.";
+      return;
+    }
+    importRle(rleText.value);
+  }
+
+  async function copyRle(): Promise<void> {
+    const cells = drawnCells();
+    if (cells.length === 0) {
+      message.textContent = "Draw something first.";
+      return;
+    }
+    rleText.value = toRle(cells, nameInput.value.trim() || null);
+    try {
+      await navigator.clipboard.writeText(rleText.value);
+      message.textContent = "Copied the RLE to the clipboard.";
+    } catch {
+      rleText.select();
+      message.textContent = "Copy the RLE from the box.";
+    }
+  }
+
   function transform(change: (cells: readonly Cell[]) => Cell[]): void {
     const changed = change(drawnCells());
     if (!fitsEditor(changed)) {
@@ -243,6 +294,11 @@ export function createLibrary(
   canvas.addEventListener("pointerup", () => {
     paintAdd = null;
   });
+
+  rlePaste.hidden = typeof navigator.clipboard?.readText !== "function";
+  rlePaste.addEventListener("click", () => void pasteRle());
+  byId("rle-import").addEventListener("click", () => importRle(rleText.value));
+  byId("rle-copy").addEventListener("click", () => void copyRle());
 
   byId("editor-rotate").addEventListener("click", () => transform(rotate));
   byId("editor-flip").addEventListener("click", () => transform(flip));

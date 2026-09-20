@@ -17,6 +17,7 @@ interface WorldRow {
 interface AccountRow {
   id: number;
   key_hash: string;
+  name: string | null;
   last_seen_at: number;
   inventory: number;
   smoothed_live: number;
@@ -43,6 +44,7 @@ export function openDatabase(path = DATABASE_PATH): DatabaseSync {
     CREATE TABLE IF NOT EXISTS accounts (
       id INTEGER PRIMARY KEY,
       key_hash TEXT NOT NULL UNIQUE,
+      name TEXT,
       created_at INTEGER NOT NULL,
       last_seen_at INTEGER NOT NULL,
       inventory REAL NOT NULL,
@@ -73,7 +75,21 @@ export function openDatabase(path = DATABASE_PATH): DatabaseSync {
       applied_at INTEGER
     );
   `);
+  addMissingColumns(db);
   return db;
+}
+
+function addMissingColumns(db: DatabaseSync): void {
+  const existing = new Set(
+    (
+      db.prepare("PRAGMA table_info(accounts)").all() as unknown as {
+        name: string;
+      }[]
+    ).map((column) => column.name),
+  );
+  if (!existing.has("name")) {
+    db.exec("ALTER TABLE accounts ADD COLUMN name TEXT");
+  }
 }
 
 export function loadGame(db: DatabaseSync, newSeed: () => number): Game {
@@ -113,6 +129,7 @@ export function loadGame(db: DatabaseSync, newSeed: () => number): Game {
     game.addAccount({
       id: row.id,
       keyHash: row.key_hash,
+      name: row.name,
       lastSeenAt: row.last_seen_at,
       inventory: row.inventory,
       smoothedLive: row.smoothed_live,
@@ -153,13 +170,15 @@ export function saveGame(db: DatabaseSync, game: Game): void {
 
     const update = db.prepare(
       `UPDATE accounts SET
-         last_seen_at = ?, inventory = ?, smoothed_live = ?, live_cells = ?,
-         home_x = ?, home_y = ?, mat_x = ?, mat_y = ?, mat_w = ?, mat_h = ?
+         name = ?, last_seen_at = ?, inventory = ?, smoothed_live = ?,
+         live_cells = ?, home_x = ?, home_y = ?,
+         mat_x = ?, mat_y = ?, mat_w = ?, mat_h = ?
        WHERE id = ?`,
     );
     for (const account of game.accounts()) {
       const { home, mat } = account;
       update.run(
+        account.name,
         account.lastSeenAt,
         account.inventory,
         account.smoothedLive,
@@ -227,6 +246,7 @@ export function listAccounts(db: DatabaseSync): unknown[] {
   return db
     .prepare(
       `SELECT id,
+         COALESCE(name, '-') AS name,
          datetime(last_seen_at / 1000, 'unixepoch') AS last_seen_utc,
          live_cells,
          CASE WHEN mat_x IS NULL THEN '-'

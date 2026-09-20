@@ -21,6 +21,7 @@ function newAccount(game: Game, id: number): Account {
   const account: Account = {
     id,
     keyHash: `key-${id}`,
+    name: null,
     inventory: STARTING_INVENTORY,
     smoothedLive: 0,
     recentLive: [],
@@ -250,5 +251,58 @@ describe("inventory", () => {
     expect(status.inventoryProgress).toBe(0.5);
     expect(status.matProgress).toBe(0.5);
     expect(status.matBlocked).toBe(false);
+  });
+});
+
+describe("leaderboard", () => {
+  it("ranks players by live cells and carries their names", () => {
+    const game = newGame();
+    const first = joined(game, 1);
+    const second = joined(game, 2);
+    first.liveCells = 3;
+    second.liveCells = 9;
+    game.rename(second, "Ada");
+
+    const { entries, players } = game.leaderboard(10);
+    expect(players).toBe(2);
+    expect(entries).toEqual([
+      { rank: 1, id: 2, name: "Ada", liveCells: 9 },
+      { rank: 2, id: 1, name: null, liveCells: 3 },
+    ]);
+  });
+
+  it("gives tied players the same rank and resumes after the tie", () => {
+    const game = newGame();
+    for (const id of [1, 2, 3]) joined(game, id);
+    game.getAccount(1)!.liveCells = 5;
+    game.getAccount(2)!.liveCells = 5;
+    game.getAccount(3)!.liveCells = 1;
+
+    const { ranks } = game.leaderboard(10);
+    expect([ranks.get(1), ranks.get(2), ranks.get(3)]).toEqual([1, 1, 3]);
+  });
+
+  it("truncates the entries but still ranks and counts everyone", () => {
+    const game = newGame();
+    for (const id of [1, 2, 3]) {
+      joined(game, id).liveCells = id;
+    }
+
+    const { entries, players, ranks } = game.leaderboard(2);
+    expect(entries.map((entry) => entry.id)).toEqual([3, 2]);
+    expect(players).toBe(3);
+    expect(ranks.get(1)).toBe(3);
+  });
+
+  it("leaves out accounts with neither a mat nor live cells", () => {
+    const game = newGame();
+    const player = joined(game, 1);
+    const watcher = newAccount(game, 2);
+    game.free(player);
+
+    expect(game.leaderboard(10).ranks.has(watcher.id)).toBe(false);
+
+    player.liveCells = 2;
+    expect(game.leaderboard(10).ranks.get(player.id)).toBe(1);
   });
 });
