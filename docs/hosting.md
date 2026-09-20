@@ -38,12 +38,20 @@ aws lightsail create-instances --instance-names life-multi-server --availability
 aws lightsail allocate-static-ip --static-ip-name life-multi-ip
 aws lightsail attach-static-ip --static-ip-name life-multi-ip --instance-name life-multi-server
 aws lightsail put-instance-public-ports --instance-name life-multi-server --port-infos \
-  fromPort=22,toPort=22,protocol=tcp,cidrs=<your-ip>/32 \
+  fromPort=22,toPort=22,protocol=tcp,cidrs=0.0.0.0/0 \
   fromPort=80,toPort=80,protocol=tcp \
   fromPort=443,toPort=443,protocol=tcp
 ```
 
 Port 3001 stays closed. Only Caddy talks to the game server.
+
+Port 22 is open to every address because the deploy workflow connects from GitHub's runners, whose addresses change constantly and are not published as a list worth pinning. An SSH key is then the only thing guarding it, so confirm the instance refuses passwords:
+
+```sh
+ssh -i ~/.ssh/life-multi ubuntu@<static-ip> sudo sshd -T | grep -E '^(passwordauthentication|permitrootlogin)'
+```
+
+Both should read `no`. Narrow port 22 back to `<your-ip>/32` if you ever drop the workflow and go back to deploying by hand.
 
 ### Domain
 
@@ -82,7 +90,7 @@ Set `LIFE_MULTI_SSH_KEY` if your key isn't at `~/.ssh/life-multi`. The script as
 
 ### Secrets the workflow needs
 
-Three repository secrets, all set once. Port 22 has to be reachable from GitHub's runners, whose addresses change constantly, so this assumes SSH is open to `0.0.0.0/0` — the deploy user's only credential is the key below.
+Three repository secrets, all set once. They assume port 22 is open to every address, as set under [Instance](#instance).
 
 Give Actions its own key rather than reusing yours, so it can be revoked on its own:
 
