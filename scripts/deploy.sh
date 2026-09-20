@@ -13,11 +13,13 @@ if [[ -n "$(git status --porcelain)" ]]; then
   exit 1
 fi
 
-git fetch --quiet origin main
 sha="$(git rev-parse --short=12 HEAD)"
-if [[ "$(git rev-parse HEAD)" != "$(git rev-parse origin/main)" ]]; then
-  read -r -p "HEAD ($sha) is not origin/main. Deploy anyway? [y/N] " answer
-  [[ "$answer" == [yY] ]] || exit 1
+if [[ "${LIFE_MULTI_ASSUME_YES:-0}" != 1 ]]; then
+  git fetch --quiet origin main
+  if [[ "$(git rev-parse HEAD)" != "$(git rev-parse origin/main)" ]]; then
+    read -r -p "HEAD ($sha) is not origin/main. Deploy anyway? [y/N] " answer
+    [[ "$answer" == [yY] ]] || exit 1
+  fi
 fi
 
 npm ci
@@ -46,6 +48,21 @@ install -m 644 deploy/life-multi.service /etc/systemd/system/life-multi.service
 
 ln -sfn "$release" "$root/current.new"
 mv -T "$root/current.new" "$root/current"
+
+db=/var/lib/life-multi/life-multi.db
+backups=/var/lib/life-multi/backups
+keep=10
+if [[ -f "$db" ]]; then
+  mkdir -p "$backups"
+  snapshot="$backups/$(date -u +%Y%m%dT%H%M%SZ)-$sha.db"
+  if node --disable-warning=ExperimentalWarning deploy/snapshot.mjs "$db" "$snapshot"; then
+    echo "Snapshotted the database to $snapshot"
+    ls -1t "$backups"/*.db | tail -n +"$((keep + 1))" | xargs -r rm -f
+  else
+    rm -f "$snapshot"
+    echo "WARNING: could not snapshot the database; deploying anyway." >&2
+  fi
+fi
 
 systemctl daemon-reload
 systemctl enable --quiet life-multi

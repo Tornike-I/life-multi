@@ -9,6 +9,7 @@ The server keeps the whole game in memory and in one SQLite file, so it runs as 
 | `/opt/life-multi/releases/<sha>`    | One directory per deploy (last 3 kept) |
 | `/opt/life-multi/current`           | Symlink to the live release            |
 | `/var/lib/life-multi/life-multi.db` | Game database                          |
+| `/var/lib/life-multi/backups`       | Pre-deploy snapshots (last 10 kept)    |
 | `/etc/default/caddy`                | `DOMAIN` used by the Caddyfile         |
 | `deploy/life-multi.service`         | Installed to `/etc/systemd/system/`    |
 | `deploy/Caddyfile`                  | Installed to `/etc/caddy/Caddyfile`    |
@@ -59,13 +60,59 @@ This installs Node 22 and Caddy and creates the `life-multi` user and directorie
 
 ## Deploy
 
+Deploys never touch `/var/lib/life-multi`, so the board survives them. The server also saves the world on `SIGTERM` before systemd restarts it, and the database is snapshotted first (see [Backups](#backups)). Players see "disconnected, retrying…" for a second or two and then reconnect on their own.
+
+Either route runs the same `scripts/deploy.sh`: it builds the client, uploads the commit and the built client, installs the systemd unit and Caddyfile, switches `current` to the new release, snapshots the database, restarts the server, and waits for `/health`. A release that never answers `/health` fails the deploy and leaves the logs in the output; `current` has already moved, so roll back with the command under [Operations](#operations).
+
+### From GitHub
+
+Actions → **Deploy** → **Run workflow**. It always deploys the tip of `main`, whatever branch the button is pressed from, and only one deploy runs at a time.
+
+Nothing gates the button beyond branch protection on `main`, so check that CI is green on the commit you're shipping.
+
+### From your machine
+
 From an up-to-date `main`, in Git Bash:
 
 ```sh
 LIFE_MULTI_HOST=ubuntu@<static-ip> scripts/deploy.sh
 ```
 
-The script builds the client locally, uploads the commit and the built client, installs the systemd unit and Caddyfile, switches `current` to the new release, restarts the server, and waits for `/health`. Players see "disconnected, retrying…" for a second or two and then reconnect on their own. Set `LIFE_MULTI_SSH_KEY` if your key isn't at `~/.ssh/life-multi`.
+Set `LIFE_MULTI_SSH_KEY` if your key isn't at `~/.ssh/life-multi`. The script asks before deploying anything that isn't `origin/main`; `LIFE_MULTI_ASSUME_YES=1` skips that prompt, which is what the workflow uses.
+
+### Secrets the workflow needs
+
+Three repository secrets, all set once. Port 22 has to be reachable from GitHub's runners, whose addresses change constantly, so this assumes SSH is open to `0.0.0.0/0` — the deploy user's only credential is the key below.
+
+Give Actions its own key rather than reusing yours, so it can be revoked on its own:
+
+```sh
+ssh-keygen -t ed25519 -C life-multi-deploy -f ~/.ssh/life-multi-deploy -N ""
+ssh -i ~/.ssh/life-multi ubuntu@<static-ip> \
+  "umask 077; mkdir -p ~/.ssh; cat >> ~/.ssh/authorized_keys" \
+  < ~/.ssh/life-multi-deploy.pub
+```
+
+Read the host key over that trusted connection rather than `ssh-keyscan`, which would trust whatever answers:
+
+```sh
+ssh -i ~/.ssh/life-multi ubuntu@<static-ip> cat /etc/ssh/ssh_host_ed25519_key.pub |
+  awk '{ print "<static-ip> " $1 " " $2 }' > /tmp/life-multi-known-hosts
+```
+
+```sh
+gh secret set LIFE_MULTI_SSH_KEY < ~/.ssh/life-multi-deploy
+gh secret set LIFE_MULTI_KNOWN_HOSTS < /tmp/life-multi-known-hosts
+gh secret set LIFE_MULTI_HOST --body "ubuntu@<static-ip>"
+```
+
+| Secret                   | What                                               |
+| ------------------------ | -------------------------------------------------- |
+| `LIFE_MULTI_SSH_KEY`     | Private half of the deploy key                     |
+| `LIFE_MULTI_KNOWN_HOSTS` | The instance's host key; the deploy fails if unset |
+| `LIFE_MULTI_HOST`        | `ubuntu@<static-ip>`                               |
+
+The workflow runs in the `production` environment, so required reviewers can be added there to make deploys need an approval.
 
 ## Operations
 
@@ -81,4 +128,16 @@ On the instance (`ssh -i ~/.ssh/life-multi ubuntu@<static-ip>`):
 
 ### Backups
 
-Lightsail takes an automatic snapshot of the instance every day. To restore one, create a new instance from the snapshot and move the static IP to it with `attach-static-ip`.
+Every deploy snapshots the database to `/var/lib/life-multi/backups/<utc-timestamp>-<sha>.db` just before restarting the server, keeping the last 10. It uses SQLite's `VACUUM INTO` (`deploy/snapshot.mjs`), so the snapshot is consistent and includes writes still sitting in the write-ahead log. A snapshot that fails only warns; it doesn't stop the deploy.
+
+To restore one, stop the server first, and delete the stale `-wal` and `-shm` alongside the database:
+
+```sh
+sudo systemctl stop life-multi
+sudo install -o life-multi -g life-multi -m 644 \
+  /var/lib/life-multi/backups/<file>.db /var/lib/life-multi/life-multi.db
+sudo rm -f /var/lib/life-multi/life-multi.db-wal /var/lib/life-multi/life-multi.db-shm
+sudo systemctl start life-multi
+```
+
+Lightsail also takes an automatic snapshot of the whole instance every day. To restore one, create a new instance from the snapshot and move the static IP to it with `attach-static-ip`.
