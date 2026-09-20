@@ -21,6 +21,7 @@ import {
   type Viewport,
   zoomAt,
 } from "./camera.ts";
+import { createLeaderboard } from "./leaderboard.ts";
 import { type ChosenBlueprint, createLibrary } from "./library.ts";
 import { drawMinimap, type MinimapLayout } from "./minimap.ts";
 import { colorFor, draw, type StampSquare } from "./render.ts";
@@ -47,7 +48,8 @@ const PAN_KEYS: Record<string, [number, number]> = {
   arrowdown: [0, 1],
   s: [0, 1],
 };
-const SUCCESS_TEXT: Record<ResultMessage["action"], string> = {
+// "name" is left out: the leaderboard dialog reports renames itself.
+const SUCCESS_TEXT: Record<Exclude<ResultMessage["action"], "name">, string> = {
   join: "You have a mat. Select empty squares on it, then press Place.",
   place: "Placed.",
 };
@@ -80,6 +82,7 @@ const stampCancelButton = element<HTMLButtonElement>("stamp-cancel");
 const stampRotateButton = element<HTMLButtonElement>("stamp-rotate");
 const stampFlipButton = element<HTMLButtonElement>("stamp-flip");
 const tutorialButton = element<HTMLButtonElement>("tutorial-open");
+const leaderboardButton = element<HTMLButtonElement>("leaderboard-open");
 const messageEl = element("message");
 
 type Drag =
@@ -111,6 +114,12 @@ const library = createLibrary(
   () => (accountId === null ? "#e5e7eb" : colorFor(accountId)),
   startStamping,
 );
+
+const leaderboard = createLeaderboard({
+  accountId: () => accountId,
+  currentName: () => state?.you?.name ?? null,
+  onRename: (name) => send({ type: "name", name }),
+});
 
 const tutorial = createTutorial({
   hasAccount: () => accountId !== null,
@@ -193,7 +202,14 @@ function handle(message: ServerMessage): void {
       }
       pruneStaged();
       break;
+    case "leaderboard":
+      leaderboard.update(message);
+      break;
     case "result":
+      if (message.action === "name") {
+        leaderboard.showNameResult(message.ok, message.reason);
+        break;
+      }
       if (message.ok) {
         messageEl.textContent = SUCCESS_TEXT[message.action];
       } else {
@@ -624,6 +640,7 @@ tutorialButton.addEventListener("click", () => tutorial.open(false));
 placeButton.addEventListener("click", commit);
 homeButton.addEventListener("click", centerOnMat);
 blueprintsButton.addEventListener("click", () => library.open());
+leaderboardButton.addEventListener("click", () => leaderboard.open());
 
 stampCancelButton.addEventListener("click", () => {
   stopStamping();
@@ -639,7 +656,9 @@ clearButton.addEventListener("click", () => {
 });
 
 window.addEventListener("keydown", (event) => {
-  if (library.dialog.open || tutorial.dialog.open) return;
+  if (library.dialog.open || tutorial.dialog.open || leaderboard.dialog.open) {
+    return;
+  }
   const key = event.key.toLowerCase();
   if (key === "enter") {
     commit();

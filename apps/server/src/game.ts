@@ -7,6 +7,7 @@ import {
   findMatSpot,
   growMat,
   inventoryProgress,
+  type LeaderboardEntry,
   matContains,
   matGrowthProgress,
   type MatInfo,
@@ -25,6 +26,7 @@ import {
 export interface Account {
   readonly id: number;
   readonly keyHash: string;
+  name: string | null;
   inventory: number;
   smoothedLive: number;
   readonly recentLive: number[];
@@ -32,6 +34,12 @@ export interface Account {
   home: Point | null;
   mat: Rect | null;
   lastSeenAt: number;
+}
+
+export interface Ranking {
+  entries: LeaderboardEntry[];
+  players: number;
+  ranks: Map<number, number>;
 }
 
 type PlacementDone = (reason: string | null) => void;
@@ -99,6 +107,38 @@ export class Game {
     account.home = null;
   }
 
+  rename(account: Account, name: string): void {
+    account.name = name;
+  }
+
+  leaderboard(size: number): Ranking {
+    const ranked = [...this.byId.values()]
+      .filter((account) => account.liveCells > 0 || account.mat !== null)
+      .sort((a, b) => b.liveCells - a.liveCells || a.id - b.id);
+
+    const ranks = new Map<number, number>();
+    let rank = 0;
+    let previous = -1;
+    ranked.forEach((account, index) => {
+      if (account.liveCells !== previous) {
+        rank = index + 1;
+        previous = account.liveCells;
+      }
+      ranks.set(account.id, rank);
+    });
+
+    return {
+      entries: ranked.slice(0, size).map((account) => ({
+        rank: ranks.get(account.id)!,
+        id: account.id,
+        name: account.name,
+        liveCells: account.liveCells,
+      })),
+      players: ranked.length,
+      ranks,
+    };
+  }
+
   queuePlacement(
     account: Account,
     cells: [number, number][],
@@ -131,6 +171,7 @@ export class Game {
     const side = account.mat?.w ?? 0;
     return {
       id: account.id,
+      name: account.name,
       inventory: Math.floor(account.inventory),
       inventoryCap,
       inventoryProgress: inventoryProgress(account.inventory, inventoryCap),

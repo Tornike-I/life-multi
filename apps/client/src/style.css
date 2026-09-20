@@ -213,9 +213,95 @@ dialog h2 {
   margin-top: 8px;
 }
 
+.rle {
+  margin-top: 12px;
+}
+
+.rle summary {
+  font-size: 13px;
+  color: #9ca3af;
+  cursor: pointer;
+}
+
+#rle-text {
+  box-sizing: border-box;
+  width: 100%;
+  margin-top: 8px;
+  padding: 6px 8px;
+  border: 1px solid #374151;
+  border-radius: 6px;
+  background: #111827;
+  color: inherit;
+  font-family: ui-monospace, monospace;
+  font-size: 13px;
+  resize: vertical;
+}
+
 .editor .hint {
   text-align: left;
   margin-top: 8px;
+}
+
+#leaderboard {
+  width: min(420px, calc(100vw - 32px));
+}
+
+#leaderboard-list {
+  display: grid;
+  gap: 4px;
+  max-height: min(50vh, 340px);
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+#leaderboard-list li {
+  display: grid;
+  grid-template-columns: 4ch 12px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+}
+
+#leaderboard-list li.you {
+  font-weight: 600;
+}
+
+#leaderboard-list .swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+}
+
+#leaderboard-list .who {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+#leaderboard-list .rank,
+#leaderboard-list .cells {
+  color: #9ca3af;
+}
+
+#leaderboard-rank {
+  margin: 10px 0 0;
+}
+
+#name-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  font-size: 14px;
+}
+
+#name-form input {
+  flex: 1 1 12ch;
+  min-width: 0;
 }
 
 .dialog-actions {
@@ -326,6 +412,12 @@ dialog h2 {
   button {
     min-height: 40px;
     padding-inline: 14px;
+  }
+
+  /* Anything under 16px makes iOS Safari zoom in when the field is focused. */
+  input,
+  textarea {
+    font-size: 16px;
   }
 }
 

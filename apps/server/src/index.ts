@@ -3,9 +3,13 @@ import { createServer } from "node:http";
 import { WebSocket, WebSocketServer } from "ws";
 import {
   type ClientMessage,
+  LEADERBOARD_MS,
+  LEADERBOARD_SIZE,
   MAX_ACCOUNTS,
+  MAX_PLAYER_NAME_LENGTH,
   parseClientMessage,
   type ResultMessage,
+  sanitizePlayerName,
   type ServerMessage,
   STARTING_INVENTORY,
   TICK_MS,
@@ -22,6 +26,7 @@ import type { Account } from "./game.ts";
 const PORT = Number(process.env.PORT ?? 3001);
 const SAVE_MS = 5000;
 const NO_ACCOUNT = "Join the game first.";
+const BAD_NAME = `A name needs 1 to ${MAX_PLAYER_NAME_LENGTH} visible characters.`;
 
 interface Session {
   account: Account | null;
@@ -62,6 +67,7 @@ function createAccount(): { account: Account; key: string } {
   const account: Account = {
     id: insertAccount(db, keyHash, now, STARTING_INVENTORY),
     keyHash,
+    name: null,
     inventory: STARTING_INVENTORY,
     smoothedLive: 0,
     recentLive: [],
@@ -119,6 +125,20 @@ function handle(
         reply(socket, "place", reason),
       );
       return;
+    case "name": {
+      if (!session.account) {
+        reply(socket, "name", NO_ACCOUNT);
+        return;
+      }
+      const name = sanitizePlayerName(message.name);
+      if (name === null) {
+        reply(socket, "name", BAD_NAME);
+        return;
+      }
+      game.rename(session.account, name);
+      reply(socket, "name", null);
+      return;
+    }
   }
 }
 
@@ -169,6 +189,24 @@ function broadcast(): void {
   }
 }
 
+function broadcastLeaderboard(): void {
+  const { entries, players, ranks } = game.leaderboard(LEADERBOARD_SIZE);
+  for (const [socket, session] of sessions) {
+    if (socket.readyState !== WebSocket.OPEN) continue;
+    const { account } = session;
+    const rank = account ? ranks.get(account.id) : undefined;
+    send(socket, {
+      type: "leaderboard",
+      entries,
+      players,
+      you:
+        account && rank !== undefined
+          ? { rank, liveCells: account.liveCells }
+          : null,
+    });
+  }
+}
+
 function persist(): void {
   const now = Date.now();
   for (const { account } of sessions.values()) {
@@ -193,6 +231,7 @@ setInterval(() => {
   broadcast();
 }, TICK_MS);
 setInterval(persist, SAVE_MS);
+setInterval(broadcastLeaderboard, LEADERBOARD_MS);
 process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);
 
