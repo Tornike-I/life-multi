@@ -38,12 +38,12 @@ aws lightsail create-instances --instance-names life-multi-server --availability
 aws lightsail allocate-static-ip --static-ip-name life-multi-ip
 aws lightsail attach-static-ip --static-ip-name life-multi-ip --instance-name life-multi-server
 aws lightsail put-instance-public-ports --instance-name life-multi-server --port-infos \
-  fromPort=22,toPort=22,protocol=tcp,cidrs=0.0.0.0/0 \
-  fromPort=80,toPort=80,protocol=tcp \
-  fromPort=443,toPort=443,protocol=tcp
+  fromPort=22,toPort=22,protocol=tcp,cidrs=0.0.0.0/0,ipv6Cidrs=::/0 \
+  fromPort=80,toPort=80,protocol=tcp,cidrs=0.0.0.0/0,ipv6Cidrs=::/0 \
+  fromPort=443,toPort=443,protocol=tcp,cidrs=0.0.0.0/0,ipv6Cidrs=::/0
 ```
 
-Port 3001 stays closed. Only Caddy talks to the game server.
+This replaces the whole port set rather than adding to it, so every port has to be listed, `ipv6Cidrs` included — leaving it off would drop IPv6 access to the site. Port 3001 stays closed. Only Caddy talks to the game server.
 
 Port 22 is open to every address because the deploy workflow connects from GitHub's runners, whose addresses change constantly and are not published as a list worth pinning. An SSH key is then the only thing guarding it, so confirm the instance refuses passwords:
 
