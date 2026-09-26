@@ -16,7 +16,7 @@ import {
   STARTING_INVENTORY,
   step,
 } from "@life-multi/shared";
-import { bounds, BUILT_IN, type Cell } from "./blueprints.ts";
+import { bounds, type Cell, findPattern } from "./blueprints.ts";
 import { colorFor } from "./render.ts";
 import {
   colorLesson,
@@ -84,7 +84,7 @@ function liveCount(board: Board): number {
 }
 
 function blueprint(id: string): { name: string; cells: Cell[] } {
-  return BUILT_IN.find((entry) => entry.id === id)!;
+  return findPattern(id)!;
 }
 
 function worldWith(placements: [id: string, x: number, y: number][]): World {

@@ -83,7 +83,8 @@ export function flip(cells: readonly Cell[]): Cell[] {
   return normalize(cells.map(([x, y]): Cell => [w - 1 - x, y]));
 }
 
-export const BUILT_IN: readonly Blueprint[] = [
+// Too plain for the library, but the tutorial teaches still lifes and oscillators with them.
+const TUTORIAL_BASICS: readonly Blueprint[] = [
   { id: "builtin:block", name: "Block", cells: parsePattern(["##", "##"]) },
   { id: "builtin:blinker", name: "Blinker", cells: parsePattern(["###"]) },
   {
@@ -91,6 +92,9 @@ export const BUILT_IN: readonly Blueprint[] = [
     name: "Beehive",
     cells: parsePattern([".##.", "#..#", ".##."]),
   },
+];
+
+export const BUILT_IN: readonly Blueprint[] = [
   {
     id: "builtin:glider",
     name: "Glider",
@@ -102,9 +106,88 @@ export const BUILT_IN: readonly Blueprint[] = [
     cells: parsePattern([".#..#", "#....", "#...#", "####."]),
   },
   {
+    id: "builtin:mwss",
+    name: "Middleweight spaceship",
+    cells: parsePattern(["...#..", ".#...#", "#.....", "#....#", "#####."]),
+  },
+  {
+    id: "builtin:hwss",
+    name: "Heavyweight spaceship",
+    cells: parsePattern([
+      "...##..",
+      ".#....#",
+      "#......",
+      "#.....#",
+      "######.",
+    ]),
+  },
+  {
+    id: "builtin:pulsar",
+    name: "Pulsar",
+    cells: parsePattern([
+      "..###...###..",
+      ".............",
+      "#....#.#....#",
+      "#....#.#....#",
+      "#....#.#....#",
+      "..###...###..",
+      ".............",
+      "..###...###..",
+      "#....#.#....#",
+      "#....#.#....#",
+      "#....#.#....#",
+      ".............",
+      "..###...###..",
+    ]),
+  },
+  {
+    id: "builtin:pentadecathlon",
+    name: "Pentadecathlon",
+    cells: parsePattern(["..#....#..", "##.####.##", "..#....#.."]),
+  },
+  {
     id: "builtin:r-pentomino",
     name: "R-pentomino",
     cells: parsePattern([".##", "##.", ".#."]),
+  },
+  {
+    id: "builtin:diehard",
+    name: "Diehard",
+    cells: parsePattern(["......#.", "##......", ".#...###"]),
+  },
+  {
+    id: "builtin:acorn",
+    name: "Acorn",
+    cells: parsePattern([".#.....", "...#...", "##..###"]),
+  },
+  {
+    id: "builtin:snark",
+    name: "Snark",
+    cells: parsePattern([
+      "......##...##....",
+      "......##..#.###..",
+      "..........#....#.",
+      "......####.##..#.",
+      "......#..#.#.#.##",
+      ".........#.#.#.#.",
+      "..........##.#.#.",
+      "..............#..",
+      ".................",
+      "##...............",
+      ".#.......##......",
+      ".#.#.....##......",
+      "..##.............",
+      ".................",
+      ".................",
+      ".................",
+      ".................",
+      ".................",
+      ".................",
+      "............##...",
+      "............#....",
+      ".............###.",
+      "...............#.",
+    ]),
   },
   {
     id: "builtin:gosper-gun",
@@ -122,6 +205,10 @@ export const BUILT_IN: readonly Blueprint[] = [
     ]),
   },
 ];
+
+export function findPattern(id: string): Blueprint | undefined {
+  return [...BUILT_IN, ...TUTORIAL_BASICS].find((entry) => entry.id === id);
+}
 
 export function parseSaved(json: string | null): Blueprint[] {
   if (!json) return [];
