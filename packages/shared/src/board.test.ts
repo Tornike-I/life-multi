@@ -51,6 +51,32 @@ describe("step", () => {
     expect(rowsOf(step(boardFrom(block), 0))).toEqual(block);
   });
 
+  describe("walls", () => {
+    const wallsAt = (board: Board, squares: [number, number][]) => {
+      const walls = new Uint8Array(board.width * board.height);
+      for (const [x, y] of squares) walls[y * board.width + x] = 1;
+      return walls;
+    };
+
+    it("stop a cell from being born on them", () => {
+      const horizontal = boardFrom([
+        ".....",
+        ".....",
+        ".111.",
+        ".....",
+        ".....",
+      ]);
+      const next = step(horizontal, 0, 0, wallsAt(horizontal, [[2, 1]]));
+      expect(rowsOf(next)).toEqual([
+        ".....",
+        ".....",
+        "..1..",
+        "..1..",
+        ".....",
+      ]);
+    });
+  });
+
   describe("three-way birth ties", () => {
     const blinker = [".....", ".....", ".123.", ".....", "....."];
     const newborn = (generation: number, seed = 0) =>

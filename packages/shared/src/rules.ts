@@ -13,6 +13,8 @@ export const BASE_INVENTORY_CAP = 12;
 export const INVENTORY_CAP_PER_LIVE_CELL = 0.1;
 export const ACCRUAL_MS = 4000;
 
+export const WALL_SIDE_DIVISOR = 2;
+
 export const LIVE_SMOOTHING_DECAY = 0.995;
 export const LIVE_PEAK_TICKS = 30;
 
@@ -52,6 +54,10 @@ export function matSideFor(smoothedLive: number): number {
 export function matGrowthProgress(smoothedLive: number, side: number): number {
   const progress = (exactMatArea(smoothedLive) - side * side) / (2 * side + 1);
   return Math.min(1, Math.max(0, progress));
+}
+
+export function wallCapFor(matSide: number): number {
+  return Math.floor(matSide / WALL_SIDE_DIVISOR);
 }
 
 export function inventoryProgress(inventory: number, cap: number): number {

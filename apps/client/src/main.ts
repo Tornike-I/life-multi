@@ -40,6 +40,8 @@ const WHEEL_ZOOM_SPEED = 0.0015;
 const KEY_ZOOM_FACTOR = 1.25;
 const REMOVE_CONFIRM_MS = 3000;
 const REMOVE_LABEL = "Remove my cells";
+const WALL_HINT =
+  "Building walls: select empty squares on your mat. Select one of your walls to remove it.";
 const PAN_KEYS: Record<string, [number, number]> = {
   arrowleft: [-1, 0],
   a: [-1, 0],
@@ -50,8 +52,11 @@ const PAN_KEYS: Record<string, [number, number]> = {
   arrowdown: [0, 1],
   s: [0, 1],
 };
-// "name" is left out: the leaderboard dialog reports renames itself.
-const SUCCESS_TEXT: Record<Exclude<ResultMessage["action"], "name">, string> = {
+// No text for "name" (the leaderboard dialog reports it) or "wall" (a drag sends one per square).
+const SUCCESS_TEXT: Record<
+  Exclude<ResultMessage["action"], "name" | "wall">,
+  string
+> = {
   join: "You have a mat. Select empty squares on it, then press Place.",
   place: "Placed.",
   removeCells: "Removed your cells from your mat.",
@@ -77,6 +82,8 @@ const matStatEl = element("mat-stat");
 const matSizeEl = element("mat-size");
 const matRing = document.querySelector<SVGCircleElement>("#mat-ring")!;
 const aliveEl = element("alive");
+const wallsEl = element("walls");
+const wallModeButton = element<HTMLButtonElement>("wall-mode");
 const placeButton = element<HTMLButtonElement>("place");
 const clearButton = element<HTMLButtonElement>("clear");
 const removeCellsButton = element<HTMLButtonElement>("remove-cells");
@@ -91,6 +98,7 @@ const messageEl = element("message");
 
 type Drag =
   | { kind: "paint"; add: boolean }
+  | { kind: "wall"; remove: boolean; visited: Set<number> }
   | { kind: "pan"; lastX: number; lastY: number };
 
 let socket: WebSocket;
@@ -99,6 +107,8 @@ let accountId: number | null = null;
 let state: StateMessage | null = null;
 let cells: Uint16Array | null = null;
 let staged = new Set<number>();
+let wallOwners = new Map<number, number>();
+let wallMode = false;
 let lastCommit = new Set<number>();
 let drag: Drag | null = null;
 let viewport: Viewport = { width: 1, height: 1 };
@@ -190,6 +200,9 @@ function handle(message: ServerMessage): void {
       break;
     case "state":
       state = message;
+      wallOwners = new Map(
+        message.walls.map((wall) => [wall.y * message.width + wall.x, wall.id]),
+      );
       if (!camera) {
         measureViewport();
         camera = {
@@ -200,6 +213,7 @@ function handle(message: ServerMessage): void {
       }
       if (!message.you?.mat) {
         followMat = true;
+        wallMode = false;
         stopStamping();
       } else if (followMat) {
         followMat = false;
@@ -213,6 +227,10 @@ function handle(message: ServerMessage): void {
     case "result":
       if (message.action === "name") {
         leaderboard.showNameResult(message.ok, message.reason);
+        break;
+      }
+      if (message.action === "wall") {
+        if (!message.ok) messageEl.textContent = message.reason ?? "";
         break;
       }
       if (message.ok) {
@@ -254,8 +272,34 @@ function pruneStaged(): void {
   const { width } = state;
   for (const index of staged) {
     const square = { x: index % width, y: Math.floor(index / width) };
-    if (!onOwnMat(square)) staged.delete(index);
+    if (!onOwnMat(square) || wallOwners.has(index)) staged.delete(index);
   }
+}
+
+function ownWallAt(index: number): boolean {
+  return accountId !== null && wallOwners.get(index) === accountId;
+}
+
+function sendWall(index: number, remove: boolean): void {
+  if (!state || !cells) return;
+  const allowed = remove
+    ? ownWallAt(index)
+    : !wallOwners.has(index) && cells[index] === DEAD;
+  if (!allowed) return;
+  const { width } = state;
+  send({
+    type: "wall",
+    x: index % width,
+    y: Math.floor(index / width),
+    remove,
+  });
+}
+
+function setWallMode(on: boolean): void {
+  stopStamping();
+  wallMode = on;
+  messageEl.textContent = on ? WALL_HINT : "";
+  refresh();
 }
 
 function ownCellsOnMat(): boolean {
@@ -318,6 +362,8 @@ function updateHud(): void {
     ? "Can't grow: another player's mat is too close."
     : `Grows to ${mat.w + 1}×${mat.h + 1} when the ring fills.`;
   aliveEl.textContent = `alive ${you.liveCells}`;
+  wallsEl.textContent = `walls ${you.walls}/${you.wallCap}`;
+  wallModeButton.setAttribute("aria-pressed", String(wallMode));
   stampCancelButton.hidden = stamp === null;
   stampRotateButton.hidden = stamp === null;
   stampFlipButton.hidden = stamp === null;
@@ -340,7 +386,8 @@ function stampSquares(): StampSquare[] | null {
     const y = originY + dy;
     const square = boardSquare({ x, y }, board);
     const index = square.y * board.width + square.x;
-    const ok = onOwnMat(square) && current[index] === DEAD;
+    const ok =
+      onOwnMat(square) && current[index] === DEAD && !wallOwners.has(index);
     return { x, y, index, ok };
   });
 }
@@ -353,6 +400,7 @@ function stampHint(): string {
 
 function startStamping(blueprint: ChosenBlueprint): void {
   stamp = blueprint;
+  wallMode = false;
   messageEl.textContent = stampHint();
   refresh();
 }
@@ -459,8 +507,16 @@ function boardSquare(world: Point, board: StateMessage): Point {
 function paint(square: Point): void {
   if (!state || drag?.kind !== "paint" || !onOwnMat(square)) return;
   const index = square.y * state.width + square.x;
-  if (drag.add) staged.add(index);
-  else staged.delete(index);
+  if (!drag.add) staged.delete(index);
+  else if (!wallOwners.has(index)) staged.add(index);
+}
+
+function buildWall(square: Point): void {
+  if (!state || drag?.kind !== "wall" || !onOwnMat(square)) return;
+  const index = square.y * state.width + square.x;
+  if (drag.visited.has(index)) return;
+  drag.visited.add(index);
+  sendWall(index, drag.remove);
 }
 
 function commit(): void {
@@ -489,8 +545,12 @@ function tap(event: PointerEvent): void {
   const square = boardSquare(world, state);
   if (!onOwnMat(square)) return;
   const index = square.y * state.width + square.x;
+  if (wallMode || ownWallAt(index)) {
+    sendWall(index, ownWallAt(index));
+    return;
+  }
   if (staged.has(index)) staged.delete(index);
-  else staged.add(index);
+  else if (!wallOwners.has(index)) staged.add(index);
   refresh();
 }
 
@@ -568,11 +628,14 @@ canvas.addEventListener("pointerdown", (event) => {
 
   const square = boardSquare(world, state);
   if (!onOwnMat(square)) return;
-  drag = {
-    kind: "paint",
-    add: !staged.has(square.y * state.width + square.x),
-  };
-  paint(square);
+  const index = square.y * state.width + square.x;
+  if (wallMode || ownWallAt(index)) {
+    drag = { kind: "wall", remove: ownWallAt(index), visited: new Set() };
+    buildWall(square);
+  } else {
+    drag = { kind: "paint", add: !staged.has(index) };
+    paint(square);
+  }
   canvas.setPointerCapture(event.pointerId);
   refresh();
 });
@@ -603,7 +666,9 @@ canvas.addEventListener("pointermove", (event) => {
 
   const world = worldSquareAt(event);
   if (!world || !state) return;
-  paint(boardSquare(world, state));
+  const square = boardSquare(world, state);
+  if (drag.kind === "wall") buildWall(square);
+  else paint(square);
   refresh();
 });
 
@@ -687,6 +752,8 @@ stampCancelButton.addEventListener("click", () => {
 stampRotateButton.addEventListener("click", () => transformStamp(rotate));
 stampFlipButton.addEventListener("click", () => transformStamp(flip));
 
+wallModeButton.addEventListener("click", () => setWallMode(!wallMode));
+
 clearButton.addEventListener("click", () => {
   staged.clear();
   refresh();
@@ -701,6 +768,7 @@ window.addEventListener("keydown", (event) => {
     commit();
   } else if (key === "escape") {
     if (stamp) stopStamping();
+    else if (wallMode) setWallMode(false);
     else staged.clear();
     drag = null;
     refresh();

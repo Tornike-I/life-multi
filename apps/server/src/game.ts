@@ -21,6 +21,8 @@ import {
   squareMat,
   step,
   TICK_MS,
+  wallCapFor,
+  type WallInfo,
 } from "@life-multi/shared";
 
 export interface Account {
@@ -31,6 +33,7 @@ export interface Account {
   smoothedLive: number;
   readonly recentLive: number[];
   liveCells: number;
+  readonly walls: Set<number>;
   home: Point | null;
   mat: Rect | null;
   lastSeenAt: number;
@@ -51,7 +54,14 @@ type Action =
       cells: [number, number][];
       done: ActionDone;
     }
-  | { kind: "removeCells"; account: Account; done: ActionDone };
+  | { kind: "removeCells"; account: Account; done: ActionDone }
+  | {
+      kind: "wall";
+      account: Account;
+      square: Point;
+      remove: boolean;
+      done: ActionDone;
+    };
 
 const NO_MAT = "You don't have a mat yet.";
 
@@ -63,11 +73,13 @@ export class Game {
   private readonly byKeyHash = new Map<string, Account>();
   private actions: Action[] = [];
   private readonly liveCounts = new Uint32Array(65536);
+  private readonly wallMask: Uint8Array;
 
   constructor(board: Board, generation: number, seed: number) {
     this.board = board;
     this.generation = generation;
     this.seed = seed;
+    this.wallMask = new Uint8Array(board.width * board.height);
   }
 
   addAccount(account: Account): void {
@@ -106,8 +118,20 @@ export class Game {
   }
 
   free(account: Account): void {
+    for (const index of account.walls) this.removeWall(account, index);
     account.mat = null;
     account.home = null;
+  }
+
+  // For loading a saved world: skips the limit, which a shrunk mat may already exceed.
+  restoreWall(account: Account, index: number): void {
+    const { mat } = account;
+    const { width, height, cells } = this.board;
+    const square = { x: index % width, y: Math.floor(index / width) };
+    if (!mat || index < 0 || index >= cells.length) return;
+    if (!matContains(mat, square, width, height)) return;
+    if (this.wallMask[index] || cells[index] !== DEAD) return;
+    this.addWall(account, index);
   }
 
   rename(account: Account, name: string): void {
@@ -154,19 +178,22 @@ export class Game {
     this.actions.push({ kind: "removeCells", account, done });
   }
 
+  queueWall(
+    account: Account,
+    square: Point,
+    remove: boolean,
+    done: ActionDone,
+  ): void {
+    this.actions.push({ kind: "wall", account, square, remove, done });
+  }
+
   tick(): void {
-    this.board = step(this.board, this.generation, this.seed);
+    this.board = step(this.board, this.generation, this.seed, this.wallMask);
     this.generation++;
 
     const actions = this.actions;
     this.actions = [];
-    for (const action of actions) {
-      action.done(
-        action.kind === "place"
-          ? this.place(action.account, action.cells)
-          : this.removeCells(action.account),
-      );
-    }
+    for (const action of actions) action.done(this.apply(action));
 
     this.updateAccounts();
   }
@@ -174,6 +201,17 @@ export class Game {
   mats(): MatInfo[] {
     return [...this.byId.values()].flatMap((account) =>
       account.mat ? [{ id: account.id, ...account.mat }] : [],
+    );
+  }
+
+  walls(): WallInfo[] {
+    const { width } = this.board;
+    return [...this.byId.values()].flatMap((account) =>
+      [...account.walls].map((index) => ({
+        id: account.id,
+        x: index % width,
+        y: Math.floor(index / width),
+      })),
     );
   }
 
@@ -192,6 +230,8 @@ export class Game {
       matBlocked:
         account.mat !== null && matSideFor(account.smoothedLive) > side,
       liveCells: account.liveCells,
+      walls: account.walls.size,
+      wallCap: wallCapFor(side),
       home: account.home,
       mat: account.mat,
     };
@@ -199,6 +239,19 @@ export class Game {
 
   private otherMats(id: number): Rect[] {
     return this.mats().filter((mat) => mat.id !== id);
+  }
+
+  private apply(action: Action): string | null {
+    switch (action.kind) {
+      case "place":
+        return this.place(action.account, action.cells);
+      case "removeCells":
+        return this.removeCells(action.account);
+      case "wall":
+        return action.remove
+          ? this.takeDownWall(action.account, action.square)
+          : this.putUpWall(action.account, action.square);
+    }
   }
 
   private place(account: Account, cells: [number, number][]): string | null {
@@ -221,6 +274,7 @@ export class Game {
       return `You only have ${available} cells to place.`;
     }
     for (const index of squares) {
+      if (this.wallMask[index]) return "Some selected squares have walls.";
       if (this.board.cells[index] !== DEAD) {
         return "Some selected squares are no longer empty.";
       }
@@ -245,6 +299,55 @@ export class Game {
     return null;
   }
 
+  private putUpWall(account: Account, point: Point): string | null {
+    const { mat } = account;
+    if (!mat) return NO_MAT;
+    const { width, height } = this.board;
+    const square = { x: mod(point.x, width), y: mod(point.y, height) };
+    const index = square.y * width + square.x;
+    if (!matContains(mat, square, width, height)) {
+      return "You can only place walls on your own mat.";
+    }
+    if (this.wallMask[index]) return "That square already has a wall.";
+    if (this.board.cells[index] !== DEAD) {
+      return "Walls can only go on empty squares.";
+    }
+    const cap = wallCapFor(mat.w);
+    if (account.walls.size >= cap) {
+      return `Your mat allows ${cap} walls. Remove one first.`;
+    }
+    this.addWall(account, index);
+    return null;
+  }
+
+  private takeDownWall(account: Account, point: Point): string | null {
+    const { width, height } = this.board;
+    const index = mod(point.y, height) * width + mod(point.x, width);
+    if (!account.walls.has(index)) return "You can only remove your own walls.";
+    this.removeWall(account, index);
+    return null;
+  }
+
+  private addWall(account: Account, index: number): void {
+    account.walls.add(index);
+    this.wallMask[index] = 1;
+  }
+
+  private removeWall(account: Account, index: number): void {
+    account.walls.delete(index);
+    this.wallMask[index] = 0;
+  }
+
+  private removeWallsOutsideMat(account: Account, mat: Rect): void {
+    const { width, height } = this.board;
+    for (const index of account.walls) {
+      const square = { x: index % width, y: Math.floor(index / width) };
+      if (!matContains(mat, square, width, height)) {
+        this.removeWall(account, index);
+      }
+    }
+  }
+
   private updateAccounts(): void {
     const { width, height } = this.board;
     const counts = this.liveCounts;
@@ -265,7 +368,10 @@ export class Game {
       if (target !== mat.w) {
         const others = target > mat.w ? this.otherMats(account.id) : [];
         const side = growMat(home, mat.w, target, others, width, height);
-        if (side !== mat.w) account.mat = squareMat(home, side, width, height);
+        if (side !== mat.w) {
+          account.mat = squareMat(home, side, width, height);
+          if (side < mat.w) this.removeWallsOutsideMat(account, account.mat);
+        }
       }
 
       const { inventoryCap } = allowanceFor(account.smoothedLive);

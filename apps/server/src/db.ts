@@ -67,6 +67,11 @@ export function openDatabase(path = DATABASE_PATH): DatabaseSync {
       cells BLOB NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS walls (
+      square INTEGER PRIMARY KEY,
+      account_id INTEGER NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS admin_actions (
       id INTEGER PRIMARY KEY,
       action TEXT NOT NULL,
@@ -135,6 +140,7 @@ export function loadGame(db: DatabaseSync, newSeed: () => number): Game {
       smoothedLive: row.smoothed_live,
       recentLive: [],
       liveCells: row.live_cells,
+      walls: new Set(),
       home: hasMat ? { x: row.home_x!, y: row.home_y! } : null,
       mat: hasMat
         ? squareMat(
@@ -145,6 +151,14 @@ export function loadGame(db: DatabaseSync, newSeed: () => number): Game {
           )
         : null,
     });
+  }
+
+  const walls = db
+    .prepare("SELECT square, account_id FROM walls")
+    .all() as unknown as { square: number; account_id: number }[];
+  for (const { square, account_id } of walls) {
+    const account = game.getAccount(account_id);
+    if (account) game.restoreWall(account, square);
   }
   return game;
 }
@@ -191,6 +205,14 @@ export function saveGame(db: DatabaseSync, game: Game): void {
         mat?.h ?? null,
         account.id,
       );
+    }
+
+    db.exec("DELETE FROM walls");
+    const insertWall = db.prepare(
+      "INSERT INTO walls (square, account_id) VALUES (?, ?)",
+    );
+    for (const account of game.accounts()) {
+      for (const square of account.walls) insertWall.run(square, account.id);
     }
     db.exec("COMMIT");
   } catch (error) {

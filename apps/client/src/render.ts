@@ -4,6 +4,7 @@ import { type Camera, mod } from "./camera.ts";
 const GOLDEN_ANGLE_DEG = 137.508;
 const BACKGROUND = "#0b0d12";
 const CONFLICT = "#ef4444";
+export const WALL = "#64748b";
 const GRID_MIN_ZOOM = 6;
 const CELL_GAP_MIN_ZOOM = 5;
 
@@ -139,6 +140,18 @@ export function draw(ctx: CanvasRenderingContext2D, view: View): void {
       if (color === DEAD) continue;
       ctx.fillStyle = solidColor(color);
       ctx.fillRect(x + inset, y + inset, cellSize, cellSize);
+    }
+  }
+
+  ctx.lineWidth = 2 * pixel;
+  for (const wall of state.walls) {
+    ctx.strokeStyle = solidColor(wall.id);
+    for (const x of copies(wall.x, 1, left, right, width)) {
+      for (const y of copies(wall.y, 1, top, bottom, height)) {
+        ctx.fillStyle = WALL;
+        ctx.fillRect(x + inset, y + inset, cellSize, cellSize);
+        outlineSquare(x, y, 2 * pixel);
+      }
     }
   }
 

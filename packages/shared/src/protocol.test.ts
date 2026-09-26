@@ -23,6 +23,14 @@ describe("parseClientMessage", () => {
       },
     ],
     ['{"type":"removeCells"}', { type: "removeCells" }],
+    [
+      '{"type":"wall","x":3,"y":-4,"remove":false}',
+      { type: "wall", x: 3, y: -4, remove: false },
+    ],
+    [
+      '{"type":"wall","x":3,"y":4,"remove":true,"extra":1}',
+      { type: "wall", x: 3, y: 4, remove: true },
+    ],
     ['{"type":"name","name":"Ada"}', { type: "name", name: "Ada" }],
     ['{"type":"name","name":"  "}', { type: "name", name: "  " }],
   ])("accepts %s", (raw, expected) => {
@@ -39,6 +47,10 @@ describe("parseClientMessage", () => {
     '{"type":"place","cells":[[1]]}',
     '{"type":"place","cells":[[1.5,2]]}',
     '{"type":"resize","mat":{"x":1,"y":2,"w":10,"h":8}}',
+    '{"type":"wall","x":3,"y":4}',
+    '{"type":"wall","x":3.5,"y":4,"remove":false}',
+    '{"type":"wall","x":"3","y":4,"remove":false}',
+    '{"type":"wall","x":3,"y":4,"remove":"yes"}',
     '{"type":"name"}',
     '{"type":"name","name":42}',
   ])("rejects %s", (raw) => {

@@ -72,6 +72,7 @@ function createAccount(): { account: Account; key: string } {
     smoothedLive: 0,
     recentLive: [],
     liveCells: 0,
+    walls: new Set(),
     home: null,
     mat: null,
     lastSeenAt: now,
@@ -134,6 +135,15 @@ function handle(
         reply(socket, "removeCells", reason),
       );
       return;
+    case "wall":
+      if (!session.account) {
+        reply(socket, "wall", NO_ACCOUNT);
+        return;
+      }
+      game.queueWall(session.account, message, message.remove, (reason) =>
+        reply(socket, "wall", reason),
+      );
+      return;
     case "name": {
       if (!session.account) {
         reply(socket, "name", NO_ACCOUNT);
@@ -184,6 +194,7 @@ function broadcast(): void {
     board.cells.byteLength,
   );
   const mats = game.mats();
+  const walls = game.walls();
   for (const [socket, session] of sessions) {
     if (socket.readyState !== WebSocket.OPEN) continue;
     send(socket, {
@@ -192,6 +203,7 @@ function broadcast(): void {
       width: board.width,
       height: board.height,
       mats,
+      walls,
       you: session.account ? game.status(session.account) : null,
     });
     socket.send(cells);
