@@ -2,7 +2,13 @@ import { describe, expect, it } from "vitest";
 import {
   bounds,
   BUILT_IN,
+  type Cell,
+  EDITOR_COLUMNS,
+  EDITOR_GROW_STEP,
+  EDITOR_ROWS,
   flip,
+  gridFor,
+  growthFor,
   normalize,
   parsePattern,
   parseSaved,
@@ -47,6 +53,53 @@ describe("patterns", () => {
   });
 });
 
+describe("editor grid", () => {
+  it("starts at the default size for small or empty drawings", () => {
+    const grid = { columns: EDITOR_COLUMNS, rows: EDITOR_ROWS };
+    expect(gridFor([])).toEqual(grid);
+    expect(gridFor(glider)).toEqual(grid);
+  });
+
+  it("leaves room around patterns larger than the default size", () => {
+    const wide: Cell[] = [
+      [0, 0],
+      [99, 59],
+    ];
+    expect(gridFor(wide)).toEqual({
+      columns: 100 + EDITOR_GROW_STEP,
+      rows: 60 + EDITOR_GROW_STEP,
+    });
+  });
+
+  it("doesn't grow while drawing stays clear of the edges", () => {
+    expect(growthFor([[10, 10]], { columns: 48, rows: 24 })).toEqual({
+      left: 0,
+      top: 0,
+      right: 0,
+      bottom: 0,
+    });
+    expect(growthFor([], { columns: 48, rows: 24 })).toEqual({
+      left: 0,
+      top: 0,
+      right: 0,
+      bottom: 0,
+    });
+  });
+
+  it("grows only the sides a drawing reaches", () => {
+    const cells: Cell[] = [
+      [0, 10],
+      [47, 23],
+    ];
+    expect(growthFor(cells, { columns: 48, rows: 24 })).toEqual({
+      left: EDITOR_GROW_STEP,
+      top: 0,
+      right: EDITOR_GROW_STEP,
+      bottom: EDITOR_GROW_STEP,
+    });
+  });
+});
+
 describe("built-in blueprints", () => {
   it("includes a full Gosper glider gun", () => {
     const gun = BUILT_IN.find(
@@ -84,6 +137,17 @@ describe("parseSaved", () => {
         ],
       },
     ]);
+  });
+
+  it("keeps blueprints larger than the editor's starting size", () => {
+    const cells = Array.from({ length: 200 * 10 }, (_, i) => [
+      i % 200,
+      Math.floor(i / 200),
+    ]);
+    const [blueprint] = parseSaved(
+      JSON.stringify([{ id: "big", name: "Big", cells }]),
+    );
+    expect(bounds(blueprint!.cells)).toEqual({ w: 200, h: 10 });
   });
 
   it.each([
