@@ -62,7 +62,7 @@ export interface LeaderboardMessage {
 
 export interface ResultMessage {
   type: "result";
-  action: "join" | "place" | "name";
+  action: "join" | "place" | "removeCells" | "name";
   ok: boolean;
   reason?: string;
 }
@@ -84,13 +84,17 @@ export interface PlaceMessage {
   cells: [x: number, y: number][];
 }
 
+export interface RemoveCellsMessage {
+  type: "removeCells";
+}
+
 export interface NameMessage {
   type: "name";
   name: string;
 }
 
 export type ClientMessage =
-  HelloMessage | JoinMessage | PlaceMessage | NameMessage;
+  HelloMessage | JoinMessage | PlaceMessage | RemoveCellsMessage | NameMessage;
 
 export function sanitizePlayerName(raw: string): string | null {
   const cleaned = raw.replace(INVISIBLE, "").replace(BLANK, " ").trim();
@@ -115,6 +119,8 @@ export function parseClientMessage(raw: string): ClientMessage | null {
       return { type: "join" };
     case "place":
       return parsePlace(message.cells);
+    case "removeCells":
+      return { type: "removeCells" };
     case "name":
       return parseName(message.name);
     default:

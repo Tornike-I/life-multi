@@ -125,6 +125,15 @@ function handle(
         reply(socket, "place", reason),
       );
       return;
+    case "removeCells":
+      if (!session.account) {
+        reply(socket, "removeCells", NO_ACCOUNT);
+        return;
+      }
+      game.queueRemoveCells(session.account, (reason) =>
+        reply(socket, "removeCells", reason),
+      );
+      return;
     case "name": {
       if (!session.account) {
         reply(socket, "name", NO_ACCOUNT);

@@ -7,7 +7,7 @@ How everything in life-multi interacts, including every formula the server uses.
 The world advances in **ticks**, one every `TICK_MS` = 100 ms (10 ticks per second). Each tick runs these steps in order:
 
 1. **Step** the board one generation (§3, §4).
-2. **Apply placements** that arrived since the last tick, in arrival order (§8).
+2. **Apply placements and removals** that arrived since the last tick, in arrival order (§8).
 3. **Update players**: live cell counts, smoothing, mat growth and shrinking, and inventory accrual (§5–§7, §9).
 4. **Broadcast** the new state to every connected client.
 
@@ -104,6 +104,10 @@ A group is applied at step 2 of the next tick, after the board has stepped, and 
 4. Every square is dead.
 
 If accepted, every square becomes alive in the player's color and `I` drops by `n`. Otherwise **nothing** is placed, nothing is spent, and the player is told why.
+
+### Removing your cells
+
+A player with a mat can remove all their own cells from it at once. Like a placement, this happens at step 2 of the next tick. Every square that is inside the player's mat and alive in the player's color becomes dead. Other players' cells on the mat and the player's own cells outside it are left alone. Removed cells are not refunded to `I`. The player's live count `L` drops right away, and `S` falls as described in §5.
 
 ## 9. Mats
 

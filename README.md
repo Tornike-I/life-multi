@@ -26,6 +26,7 @@ The full rules and every formula are in **[rulebook.md](rulebook.md)**.
 | Select squares   | Left click or drag on your mat, or tap squares                         |
 | Place selection  | **Place** or Enter                                                     |
 | Clear selection  | **Clear** or Esc                                                       |
+| Remove my cells  | **Remove my cells**, then click again to confirm                       |
 | Blueprints       | **Blueprints** opens the library and editor; **Use** one to stamp it   |
 | Stamp            | Click or tap to select its squares; **Rotate** or `R`, **Flip** or `F` |
 | Stop stamping    | **Cancel blueprint** or Esc                                            |

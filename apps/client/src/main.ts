@@ -38,6 +38,8 @@ const TOUCH_HINT =
 const PAN_STEP_PX = 80;
 const WHEEL_ZOOM_SPEED = 0.0015;
 const KEY_ZOOM_FACTOR = 1.25;
+const REMOVE_CONFIRM_MS = 3000;
+const REMOVE_LABEL = "Remove my cells";
 const PAN_KEYS: Record<string, [number, number]> = {
   arrowleft: [-1, 0],
   a: [-1, 0],
@@ -52,6 +54,7 @@ const PAN_KEYS: Record<string, [number, number]> = {
 const SUCCESS_TEXT: Record<Exclude<ResultMessage["action"], "name">, string> = {
   join: "You have a mat. Select empty squares on it, then press Place.",
   place: "Placed.",
+  removeCells: "Removed your cells from your mat.",
 };
 
 function element<T extends HTMLElement = HTMLElement>(id: string): T {
@@ -76,6 +79,7 @@ const matRing = document.querySelector<SVGCircleElement>("#mat-ring")!;
 const aliveEl = element("alive");
 const placeButton = element<HTMLButtonElement>("place");
 const clearButton = element<HTMLButtonElement>("clear");
+const removeCellsButton = element<HTMLButtonElement>("remove-cells");
 const homeButton = element<HTMLButtonElement>("home");
 const blueprintsButton = element<HTMLButtonElement>("blueprints-open");
 const stampCancelButton = element<HTMLButtonElement>("stamp-cancel");
@@ -105,6 +109,7 @@ let renderQueued = false;
 let stamp: ChosenBlueprint | null = null;
 let hover: Point | null = null;
 let tapStart: Point | null = null;
+let removeConfirmTimer: number | null = null;
 const touches = new Map<number, Point>();
 const coarsePointer = matchMedia("(pointer: coarse)").matches;
 const compactLayout = matchMedia("(max-width: 600px)");
@@ -253,6 +258,35 @@ function pruneStaged(): void {
   }
 }
 
+function ownCellsOnMat(): boolean {
+  const mat = state?.you?.mat;
+  if (!state || !mat || !cells || accountId === null) return false;
+  const { width, height } = state;
+  for (let dy = 0; dy < mat.h; dy++) {
+    const row = mod(mat.y + dy, height) * width;
+    for (let dx = 0; dx < mat.w; dx++) {
+      if (cells[row + mod(mat.x + dx, width)] === accountId) return true;
+    }
+  }
+  return false;
+}
+
+function disarmRemove(): void {
+  if (removeConfirmTimer !== null) clearTimeout(removeConfirmTimer);
+  removeConfirmTimer = null;
+  removeCellsButton.textContent = REMOVE_LABEL;
+}
+
+function removeCells(): void {
+  if (removeConfirmTimer === null) {
+    removeCellsButton.textContent = "Click again to confirm";
+    removeConfirmTimer = window.setTimeout(disarmRemove, REMOVE_CONFIRM_MS);
+    return;
+  }
+  disarmRemove();
+  send({ type: "removeCells" });
+}
+
 function setRing(ring: SVGCircleElement, progress: number): void {
   ring.style.strokeDashoffset = String(1 - progress);
 }
@@ -290,6 +324,8 @@ function updateHud(): void {
   placeButton.textContent = `Place ${staged.size}`;
   placeButton.disabled =
     staged.size === 0 || staged.size > you.inventory || blocked;
+  removeCellsButton.disabled = !ownCellsOnMat();
+  if (removeCellsButton.disabled) disarmRemove();
 }
 
 function stampSquares(): StampSquare[] | null {
@@ -638,6 +674,7 @@ joinButton.addEventListener("click", () => {
 });
 tutorialButton.addEventListener("click", () => tutorial.open(false));
 placeButton.addEventListener("click", commit);
+removeCellsButton.addEventListener("click", removeCells);
 homeButton.addEventListener("click", centerOnMat);
 blueprintsButton.addEventListener("click", () => library.open());
 leaderboardButton.addEventListener("click", () => leaderboard.open());
