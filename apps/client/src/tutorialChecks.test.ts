@@ -1,6 +1,6 @@
 import { createBoard, getCell, setCell, step } from "@life-multi/shared";
 import { describe, expect, it } from "vitest";
-import { BUILT_IN } from "./blueprints.ts";
+import { findPattern } from "./blueprints.ts";
 import {
   colorLesson,
   isOscillator,
@@ -14,7 +14,7 @@ import {
 
 function boardWith(id: string, x = 10, y = 10) {
   const board = createBoard(TUTORIAL_SIZE, TUTORIAL_SIZE);
-  const blueprint = BUILT_IN.find((entry) => entry.id === id)!;
+  const blueprint = findPattern(id)!;
   placePattern(board, blueprint.cells, x, y, PLAYER);
   return board;
 }

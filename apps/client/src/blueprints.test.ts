@@ -1,3 +1,4 @@
+import { createBoard, DEAD, setCell, step } from "@life-multi/shared";
 import { describe, expect, it } from "vitest";
 import {
   bounds,
@@ -6,6 +7,7 @@ import {
   EDITOR_COLUMNS,
   EDITOR_GROW_STEP,
   EDITOR_ROWS,
+  findPattern,
   flip,
   gridFor,
   growthFor,
@@ -100,18 +102,74 @@ describe("editor grid", () => {
   });
 });
 
+function evolve(cells: readonly Cell[], generations: number): Cell[] {
+  let board = createBoard(64, 64);
+  for (const [x, y] of cells) setCell(board, x + 24, y + 24, 1);
+  for (let generation = 0; generation < generations; generation++) {
+    board = step(board, generation);
+  }
+  const live: Cell[] = [];
+  board.cells.forEach((color, index) => {
+    if (color !== DEAD) live.push([index % 64, Math.floor(index / 64)]);
+  });
+  return live;
+}
+
+function pattern(id: string): Cell[] {
+  return findPattern(id)!.cells;
+}
+
 describe("built-in blueprints", () => {
+  it("leaves the tutorial's basic shapes out of the library", () => {
+    const ids = BUILT_IN.map((blueprint) => blueprint.id);
+    for (const id of ["builtin:block", "builtin:blinker", "builtin:beehive"]) {
+      expect(ids).not.toContain(id);
+      expect(findPattern(id)).toBeDefined();
+    }
+  });
+
+  it.each([
+    ["builtin:lwss", 9],
+    ["builtin:mwss", 11],
+    ["builtin:hwss", 13],
+    ["builtin:pulsar", 48],
+    ["builtin:pentadecathlon", 12],
+    ["builtin:diehard", 7],
+    ["builtin:acorn", 7],
+  ])("%s has %i cells", (id, count) => {
+    expect(pattern(id)).toHaveLength(count);
+  });
+
+  it.each([
+    ["builtin:pulsar", 3],
+    ["builtin:pentadecathlon", 15],
+  ])("%s repeats every %i generations", (id, period) => {
+    const start = evolve(pattern(id), 0);
+    expect(evolve(pattern(id), period)).toEqual(start);
+    expect(evolve(pattern(id), 1)).not.toEqual(start);
+  });
+
+  it.each(["builtin:glider", "builtin:lwss", "builtin:mwss", "builtin:hwss"])(
+    "%s travels, keeping its shape",
+    (id) => {
+      const start = evolve(pattern(id), 0);
+      const later = evolve(pattern(id), 4);
+      expect(normalize(later)).toEqual(normalize(start));
+      expect(later).not.toEqual(start);
+    },
+  );
+
+  it("dies out at generation 130 with a diehard", () => {
+    expect(evolve(pattern("builtin:diehard"), 129)).not.toEqual([]);
+    expect(evolve(pattern("builtin:diehard"), 130)).toEqual([]);
+  });
+
   it("includes a full Gosper glider gun", () => {
     const gun = BUILT_IN.find(
       (blueprint) => blueprint.id === "builtin:gosper-gun",
     );
     expect(gun?.cells).toHaveLength(36);
     expect(bounds(gun!.cells)).toEqual({ w: 36, h: 9 });
-  });
-
-  it("includes a lightweight spaceship with nine cells", () => {
-    const lwss = BUILT_IN.find((blueprint) => blueprint.id === "builtin:lwss");
-    expect(lwss?.cells).toHaveLength(9);
   });
 });
 
