@@ -136,6 +136,7 @@ describe("built-in blueprints", () => {
     ["builtin:pentadecathlon", 12],
     ["builtin:diehard", 7],
     ["builtin:acorn", 7],
+    ["builtin:snark", 52],
   ])("%s has %i cells", (id, count) => {
     expect(pattern(id)).toHaveLength(count);
   });
@@ -158,6 +159,32 @@ describe("built-in blueprints", () => {
       expect(later).not.toEqual(start);
     },
   );
+
+  it("turns a glider 90 degrees with a snark, which stays intact", () => {
+    const snark = pattern("builtin:snark");
+    const still = evolve(snark, 0);
+    expect(evolve(snark, 1)).toEqual(still);
+
+    const incoming: Cell[] = [
+      [3, 20],
+      [4, 20],
+      [2, 21],
+      [4, 21],
+      [4, 22],
+    ];
+    const snarkKeys = new Set(still.map(([x, y]) => `${x},${y}`));
+    const glider = (generations: number) => {
+      const live = evolve([...snark, ...incoming], generations);
+      for (const key of snarkKeys) {
+        expect(live.map(([x, y]) => `${x},${y}`)).toContain(key);
+      }
+      return live.filter(([x, y]) => !snarkKeys.has(`${x},${y}`));
+    };
+
+    const outgoing = glider(80);
+    expect(outgoing).toHaveLength(5);
+    expect(glider(100)).toEqual(outgoing.map(([x, y]): Cell => [x + 5, y + 5]));
+  });
 
   it("dies out at generation 130 with a diehard", () => {
     expect(evolve(pattern("builtin:diehard"), 129)).not.toEqual([]);
