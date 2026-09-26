@@ -74,6 +74,28 @@ header,
   border-color: var(--player);
 }
 
+.tool-group {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+}
+
+.hotkey {
+  display: none;
+  color: #9ca3af;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .hotkey {
+    display: inline;
+  }
+
+  #place {
+    min-width: 13ch;
+  }
+}
+
 .stage {
   position: relative;
   overflow: hidden;

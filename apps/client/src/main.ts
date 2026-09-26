@@ -21,6 +21,7 @@ import {
   type Viewport,
   zoomAt,
 } from "./camera.ts";
+import { addHotkeyHints, pressHotkey } from "./hotkeys.ts";
 import { createLeaderboard } from "./leaderboard.ts";
 import { type ChosenBlueprint, createLibrary } from "./library.ts";
 import { drawMinimap, type MinimapLayout } from "./minimap.ts";
@@ -74,6 +75,7 @@ const youEl = element("you");
 const statusEl = element("status");
 const generationEl = element("generation");
 const joinButton = element<HTMLButtonElement>("join");
+const joinLabel = element("join-label");
 const playerEl = element("player");
 const inventoryEl = element("inventory");
 const inventoryRing =
@@ -85,8 +87,10 @@ const aliveEl = element("alive");
 const wallsEl = element("walls");
 const wallModeButton = element<HTMLButtonElement>("wall-mode");
 const placeButton = element<HTMLButtonElement>("place");
+const placeCount = element("place-count");
 const clearButton = element<HTMLButtonElement>("clear");
 const removeCellsButton = element<HTMLButtonElement>("remove-cells");
+const removeLabel = element("remove-label");
 const homeButton = element<HTMLButtonElement>("home");
 const blueprintsButton = element<HTMLButtonElement>("blueprints-open");
 const stampCancelButton = element<HTMLButtonElement>("stamp-cancel");
@@ -318,12 +322,12 @@ function ownCellsOnMat(): boolean {
 function disarmRemove(): void {
   if (removeConfirmTimer !== null) clearTimeout(removeConfirmTimer);
   removeConfirmTimer = null;
-  removeCellsButton.textContent = REMOVE_LABEL;
+  removeLabel.textContent = REMOVE_LABEL;
 }
 
 function removeCells(): void {
   if (removeConfirmTimer === null) {
-    removeCellsButton.textContent = "Click again to confirm";
+    removeLabel.textContent = "Click again to confirm";
     removeConfirmTimer = window.setTimeout(disarmRemove, REMOVE_CONFIRM_MS);
     return;
   }
@@ -344,7 +348,7 @@ function updateHud(): void {
   youEl.style.color = accountId === null ? "" : colorFor(accountId);
   generationEl.textContent = state ? `generation ${state.generation}` : "";
   joinButton.hidden = !state || mat !== null;
-  joinButton.textContent =
+  joinLabel.textContent =
     accountId === null ? "Join the game" : "Claim a new spot";
   playerEl.hidden = !you || !mat;
   if (!you || !mat) return;
@@ -364,10 +368,11 @@ function updateHud(): void {
   aliveEl.textContent = `alive ${you.liveCells}`;
   wallsEl.textContent = `walls ${you.walls}/${you.wallCap}`;
   wallModeButton.setAttribute("aria-pressed", String(wallMode));
-  stampCancelButton.hidden = stamp === null;
-  stampRotateButton.hidden = stamp === null;
-  stampFlipButton.hidden = stamp === null;
-  placeButton.textContent = `Place ${staged.size}`;
+  stampCancelButton.disabled = stamp === null;
+  stampRotateButton.disabled = stamp === null;
+  stampFlipButton.disabled = stamp === null;
+  clearButton.disabled = staged.size === 0;
+  placeCount.textContent = String(staged.size);
   placeButton.disabled =
     staged.size === 0 || staged.size > you.inventory || blocked;
   removeCellsButton.disabled = !ownCellsOnMat();
@@ -395,7 +400,7 @@ function stampSquares(): StampSquare[] | null {
 function stampHint(): string {
   if (!stamp) return "";
   const inventory = state?.you?.inventory ?? 0;
-  return `${stamp.name}: ${stamp.cells.length} cells (you have ${inventory}). Tap or click to select it. Rotate (R) and Flip (F) turn it.`;
+  return `${stamp.name}: ${stamp.cells.length} cells (you have ${inventory}). Tap or click to select it. Rotate and Flip turn it.`;
 }
 
 function startStamping(blueprint: ChosenBlueprint): void {
@@ -763,21 +768,14 @@ window.addEventListener("keydown", (event) => {
   if (library.dialog.open || tutorial.dialog.open || leaderboard.dialog.open) {
     return;
   }
+  if (pressHotkey(document, event)) return;
   const key = event.key.toLowerCase();
-  if (key === "enter") {
-    commit();
-  } else if (key === "escape") {
+  if (key === "escape") {
     if (stamp) stopStamping();
     else if (wallMode) setWallMode(false);
     else staged.clear();
     drag = null;
     refresh();
-  } else if (key === "r" && stamp) {
-    transformStamp(rotate);
-  } else if (key === "f" && stamp) {
-    transformStamp(flip);
-  } else if (key === "h") {
-    centerOnMat();
   } else if (camera && (key === "+" || key === "=" || key === "-")) {
     const factor = key === "-" ? 1 / KEY_ZOOM_FACTOR : KEY_ZOOM_FACTOR;
     camera = zoomAt(
@@ -796,5 +794,6 @@ window.addEventListener("keydown", (event) => {
   }
 });
 
+addHotkeyHints(document);
 if (coarsePointer) messageEl.textContent = TOUCH_HINT;
 connect();

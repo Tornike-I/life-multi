@@ -16,25 +16,27 @@ The full rules and every formula are in **[rulebook.md](rulebook.md)**.
 
 ### Controls
 
-| Action           | Input                                                                  |
-| ---------------- | ---------------------------------------------------------------------- |
-| Tutorial         | Offered when you first click **Join**, or **Tutorial** at the top      |
-| Zoom             | Mouse wheel, `+` / `-`, or pinch                                       |
-| Pan              | Right or middle drag, WASD / arrow keys, or one-finger drag            |
-| Jump to your mat | **My mat** or `H`                                                      |
-| Minimap          | Click or drag it to move the camera                                    |
-| Select squares   | Left click or drag on your mat, or tap squares                         |
-| Place selection  | **Place** or Enter                                                     |
-| Clear selection  | **Clear** or Esc                                                       |
-| Remove my cells  | **Remove my cells**, then click again to confirm                       |
-| Build walls      | **Build walls**, then click, drag or tap empty squares on your mat     |
-| Remove a wall    | Click or tap one of your walls                                         |
-| Stop walls       | **Build walls** again or Esc                                           |
-| Blueprints       | **Blueprints** opens the library and editor; **Use** one to stamp it   |
-| Stamp            | Click or tap to select its squares; **Rotate** or `R`, **Flip** or `F` |
-| Stop stamping    | **Cancel blueprint** or Esc                                            |
-| RLE patterns     | **Paste or copy RLE** in the blueprint editor, to import or export     |
-| Leaderboard      | **Leaderboard** at the top; set your name there                        |
+| Action           | Input                                                                      |
+| ---------------- | -------------------------------------------------------------------------- |
+| Tutorial         | Offered when you first click **Join** (`J`), or **Tutorial** (`T`)         |
+| Zoom             | Mouse wheel, `+` / `-`, or pinch                                           |
+| Pan              | Right or middle drag, WASD / arrow keys, or one-finger drag                |
+| Jump to your mat | **My mat** or `H`                                                          |
+| Minimap          | Click or drag it to move the camera                                        |
+| Select squares   | Left click or drag on your mat, or tap squares                             |
+| Place selection  | **Place** or Enter                                                         |
+| Clear selection  | **Clear**, `C` or Esc                                                      |
+| Remove my cells  | **Remove my cells** or `X`, then again to confirm                          |
+| Build walls      | **Build walls** or `G`, then click, drag or tap empty squares on your mat  |
+| Remove a wall    | Click or tap one of your walls                                             |
+| Stop walls       | **Build walls** or `G` again, or Esc                                       |
+| Blueprints       | **Blueprints** (`B`) opens the library and editor; **Use** one to stamp it |
+| Stamp            | Click or tap to select its squares; **Rotate** or `R`, **Flip** or `F`     |
+| Stop stamping    | **Cancel**, `Q` or Esc                                                     |
+| RLE patterns     | **Paste or copy RLE** in the blueprint editor, to import or export         |
+| Leaderboard      | **Leaderboard** (`L`) at the top; set your name there                      |
+
+On a desktop browser, every button below the board and at the top shows its hotkey after its name, like **Clear (c)**. Hotkeys are off while a dialog is open or a text field has focus.
 
 ## Stack
 
