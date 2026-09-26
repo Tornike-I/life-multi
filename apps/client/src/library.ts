@@ -3,9 +3,9 @@ import {
   bounds,
   BUILT_IN,
   type Cell,
-  EDITOR_COLUMNS,
-  EDITOR_ROWS,
   flip,
+  gridFor,
+  growthFor,
   loadSaved,
   MAX_NAME_LENGTH,
   normalize,
@@ -15,6 +15,8 @@ import {
 import { isLifeRule, MAX_RLE_INPUT, parseRle, toRle } from "./rle.ts";
 
 const EDITOR_CELL_PX = 14;
+const EDITOR_MAX_CANVAS_PX = 4096;
+const EDITOR_MIN_GRID_LINE_PX = 6;
 
 export interface ChosenBlueprint {
   name: string;
@@ -50,21 +52,36 @@ export function createLibrary(
 
   let saved: Blueprint[] = [];
   let drawing = new Set<number>();
+  let { columns, rows } = gridFor([]);
+  let cellPx = EDITOR_CELL_PX;
   let editingId: string | null = null;
   let paintAdd: boolean | null = null;
 
   nameInput.maxLength = MAX_NAME_LENGTH;
   rleText.maxLength = MAX_RLE_INPUT;
-  canvas.width = EDITOR_COLUMNS * EDITOR_CELL_PX;
-  canvas.height = EDITOR_ROWS * EDITOR_CELL_PX;
+  resizeCanvas();
+
+  function gridCells(): Cell[] {
+    return [...drawing].map((index): Cell => [
+      index % columns,
+      Math.floor(index / columns),
+    ]);
+  }
 
   function drawnCells(): Cell[] {
-    return normalize(
-      [...drawing].map((index): Cell => [
-        index % EDITOR_COLUMNS,
-        Math.floor(index / EDITOR_COLUMNS),
-      ]),
+    return normalize(gridCells());
+  }
+
+  function resizeCanvas(): void {
+    cellPx = Math.max(
+      1,
+      Math.min(
+        EDITOR_CELL_PX,
+        Math.floor(EDITOR_MAX_CANVAS_PX / Math.max(columns, rows)),
+      ),
     );
+    canvas.width = columns * cellPx;
+    canvas.height = rows * cellPx;
   }
 
   function setEditing(id: string | null): void {
@@ -74,43 +91,55 @@ export function createLibrary(
 
   function setDrawing(cells: readonly Cell[]): void {
     const { w, h } = bounds(cells);
-    const offsetX = Math.floor((EDITOR_COLUMNS - w) / 2);
-    const offsetY = Math.floor((EDITOR_ROWS - h) / 2);
+    ({ columns, rows } = gridFor(cells));
+    const offsetX = Math.floor((columns - w) / 2);
+    const offsetY = Math.floor((rows - h) / 2);
     drawing = new Set(
-      cells.map(([x, y]) => (y + offsetY) * EDITOR_COLUMNS + x + offsetX),
+      cells.map(([x, y]) => (y + offsetY) * columns + x + offsetX),
     );
+    resizeCanvas();
     draw();
   }
 
-  function fitsEditor(cells: readonly Cell[]): boolean {
-    const { w, h } = bounds(cells);
-    return w <= EDITOR_COLUMNS && h <= EDITOR_ROWS;
+  function growToFit(): void {
+    const cells = gridCells();
+    const { left, top, right, bottom } = growthFor(cells, { columns, rows });
+    if (left + top + right + bottom === 0) return;
+    columns += left + right;
+    rows += top + bottom;
+    drawing = new Set(cells.map(([x, y]) => (y + top) * columns + x + left));
+    resizeCanvas();
+    draw();
   }
 
   function draw(): void {
     ctx.fillStyle = "#0b0d12";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    ctx.strokeStyle = "rgb(255 255 255 / 0.08)";
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    for (let x = 1; x < EDITOR_COLUMNS; x++) {
-      ctx.moveTo(x * EDITOR_CELL_PX + 0.5, 0);
-      ctx.lineTo(x * EDITOR_CELL_PX + 0.5, canvas.height);
+    const shownCellPx = (canvas.clientWidth || canvas.width) / columns;
+    if (shownCellPx >= EDITOR_MIN_GRID_LINE_PX) {
+      ctx.strokeStyle = "rgb(255 255 255 / 0.08)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      for (let x = 1; x < columns; x++) {
+        ctx.moveTo(x * cellPx + 0.5, 0);
+        ctx.lineTo(x * cellPx + 0.5, canvas.height);
+      }
+      for (let y = 1; y < rows; y++) {
+        ctx.moveTo(0, y * cellPx + 0.5);
+        ctx.lineTo(canvas.width, y * cellPx + 0.5);
+      }
+      ctx.stroke();
     }
-    for (let y = 1; y < EDITOR_ROWS; y++) {
-      ctx.moveTo(0, y * EDITOR_CELL_PX + 0.5);
-      ctx.lineTo(canvas.width, y * EDITOR_CELL_PX + 0.5);
-    }
-    ctx.stroke();
 
+    const gap = cellPx >= 4 ? 1 : 0;
     ctx.fillStyle = playerColor();
     for (const index of drawing) {
       ctx.fillRect(
-        (index % EDITOR_COLUMNS) * EDITOR_CELL_PX + 1,
-        Math.floor(index / EDITOR_COLUMNS) * EDITOR_CELL_PX + 1,
-        EDITOR_CELL_PX - 1,
-        EDITOR_CELL_PX - 1,
+        (index % columns) * cellPx + gap,
+        Math.floor(index / columns) * cellPx + gap,
+        cellPx - gap,
+        cellPx - gap,
       );
     }
 
@@ -208,12 +237,6 @@ export function createLibrary(
       message.textContent = result.error;
       return;
     }
-    const { w, h } = bounds(result.cells);
-    if (!fitsEditor(result.cells)) {
-      message.textContent = `That pattern is ${w}×${h}; the editor is ${EDITOR_COLUMNS}×${EDITOR_ROWS}.`;
-      return;
-    }
-
     setEditing(null);
     if (result.name) nameInput.value = result.name.slice(0, MAX_NAME_LENGTH);
     setDrawing(result.cells);
@@ -250,25 +273,15 @@ export function createLibrary(
   }
 
   function transform(change: (cells: readonly Cell[]) => Cell[]): void {
-    const changed = change(drawnCells());
-    if (!fitsEditor(changed)) {
-      message.textContent =
-        "That doesn't fit the editor. Use it, then press R on the board instead.";
-      return;
-    }
-    setDrawing(changed);
+    setDrawing(change(drawnCells()));
   }
 
   function indexAt(event: PointerEvent): number | null {
     const rect = canvas.getBoundingClientRect();
-    const x = Math.floor(
-      ((event.clientX - rect.left) / rect.width) * EDITOR_COLUMNS,
-    );
-    const y = Math.floor(
-      ((event.clientY - rect.top) / rect.height) * EDITOR_ROWS,
-    );
-    if (x < 0 || y < 0 || x >= EDITOR_COLUMNS || y >= EDITOR_ROWS) return null;
-    return y * EDITOR_COLUMNS + x;
+    const x = Math.floor(((event.clientX - rect.left) / rect.width) * columns);
+    const y = Math.floor(((event.clientY - rect.top) / rect.height) * rows);
+    if (x < 0 || y < 0 || x >= columns || y >= rows) return null;
+    return y * columns + x;
   }
 
   function paintAt(index: number): void {
@@ -291,9 +304,15 @@ export function createLibrary(
     if (index !== null) paintAt(index);
   });
 
-  canvas.addEventListener("pointerup", () => {
+  function endStroke(): void {
+    if (paintAdd === null) return;
     paintAdd = null;
-  });
+    // Growing mid-stroke would shift or rescale the grid under the pointer.
+    growToFit();
+  }
+
+  canvas.addEventListener("pointerup", endStroke);
+  canvas.addEventListener("pointercancel", endStroke);
 
   rlePaste.hidden = typeof navigator.clipboard?.readText !== "function";
   rlePaste.addEventListener("click", () => void pasteRle());
@@ -307,11 +326,10 @@ export function createLibrary(
     use(nameInput.value.trim() || "Drawing", drawnCells()),
   );
   byId("editor-clear").addEventListener("click", () => {
-    drawing.clear();
     setEditing(null);
     nameInput.value = "";
     message.textContent = "";
-    draw();
+    setDrawing([]);
   });
 
   return {
@@ -319,8 +337,8 @@ export function createLibrary(
     open() {
       saved = loadSaved();
       renderList();
-      draw();
       dialog.showModal();
+      draw();
     },
   };
 }

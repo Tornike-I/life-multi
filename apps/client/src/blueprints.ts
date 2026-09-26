@@ -10,6 +10,20 @@ const STORAGE_KEY = "life-multi:blueprints";
 export const MAX_NAME_LENGTH = 40;
 export const EDITOR_COLUMNS = 48;
 export const EDITOR_ROWS = 24;
+export const EDITOR_MARGIN = 2;
+export const EDITOR_GROW_STEP = 16;
+
+export interface Grid {
+  columns: number;
+  rows: number;
+}
+
+export interface Growth {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+}
 
 export function normalize(cells: readonly Cell[]): Cell[] {
   if (cells.length === 0) return [];
@@ -35,6 +49,27 @@ export function bounds(cells: readonly Cell[]): { w: number; h: number } {
   return {
     w: Math.max(...cells.map(([x]) => x)) + 1,
     h: Math.max(...cells.map(([, y]) => y)) + 1,
+  };
+}
+
+export function gridFor(cells: readonly Cell[]): Grid {
+  const { w, h } = bounds(cells);
+  return {
+    columns: Math.max(EDITOR_COLUMNS, w + EDITOR_GROW_STEP),
+    rows: Math.max(EDITOR_ROWS, h + EDITOR_GROW_STEP),
+  };
+}
+
+export function growthFor(cells: readonly Cell[], grid: Grid): Growth {
+  if (cells.length === 0) return { left: 0, top: 0, right: 0, bottom: 0 };
+  const xs = cells.map(([x]) => x);
+  const ys = cells.map(([, y]) => y);
+  const grow = (gap: number) => (gap < EDITOR_MARGIN ? EDITOR_GROW_STEP : 0);
+  return {
+    left: grow(Math.min(...xs)),
+    top: grow(Math.min(...ys)),
+    right: grow(grid.columns - 1 - Math.max(...xs)),
+    bottom: grow(grid.rows - 1 - Math.max(...ys)),
   };
 }
 
@@ -104,7 +139,6 @@ export function parseSaved(json: string | null): Blueprint[] {
     if (typeof id !== "string" || typeof name !== "string") return [];
     if (name.length === 0 || name.length > MAX_NAME_LENGTH) return [];
     if (!Array.isArray(cells) || cells.length === 0) return [];
-    if (cells.length > EDITOR_COLUMNS * EDITOR_ROWS) return [];
     const valid = cells.every(
       (cell) =>
         Array.isArray(cell) &&
