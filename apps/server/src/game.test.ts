@@ -26,6 +26,7 @@ function newAccount(game: Game, id: number): Account {
     smoothedLive: 0,
     recentLive: [],
     liveCells: 0,
+    walls: new Set(),
     home: null,
     mat: null,
     lastSeenAt: 0,
@@ -219,6 +220,117 @@ describe("removing cells", () => {
 
     expect(removeOnNextTick(game, player)).toMatch(/mat/);
     expect(cellAt(game, 10, 10)).toBe(1);
+  });
+});
+
+function wallOnNextTick(
+  game: Game,
+  account: Account,
+  x: number,
+  y: number,
+  remove = false,
+): string | null | undefined {
+  let outcome: string | null | undefined;
+  game.queueWall(account, { x, y }, remove, (reason) => {
+    outcome = reason;
+  });
+  game.tick();
+  return outcome;
+}
+
+describe("walls", () => {
+  it("keeps a cell from being born on a wall", () => {
+    const game = newGame();
+    const player = joined(game, 1);
+    const { x, y } = player.mat!;
+    expect(wallOnNextTick(game, player, x + 3, y + 2)).toBeNull();
+    expect(
+      placeOnNextTick(game, player, [
+        [x + 2, y + 3],
+        [x + 3, y + 3],
+        [x + 4, y + 3],
+      ]),
+    ).toBeNull();
+
+    game.tick();
+    expect(cellAt(game, x + 3, y + 2)).toBe(DEAD);
+    expect(cellAt(game, x + 3, y + 4)).toBe(1);
+    expect(game.walls()).toEqual([{ id: 1, x: x + 3, y: y + 2 }]);
+  });
+
+  it("refuses squares outside the mat, live squares and squares with a wall", () => {
+    const game = newGame();
+    const player = joined(game, 1);
+    const { x, y } = player.mat!;
+    putBlock(game, x, y, 2);
+
+    expect(wallOnNextTick(game, player, x - 1, y)).toMatch(/own mat/);
+    expect(wallOnNextTick(game, player, x, y)).toMatch(/empty/);
+    expect(wallOnNextTick(game, player, x + 5, y)).toBeNull();
+    expect(wallOnNextTick(game, player, x + 5, y)).toMatch(/already/);
+    expect(player.walls.size).toBe(1);
+  });
+
+  it("allows half the mat side and no more", () => {
+    const game = newGame();
+    const player = joined(game, 1);
+    const { x, y } = player.mat!;
+    for (let i = 0; i < 4; i++) {
+      expect(wallOnNextTick(game, player, x + 2 * i, y)).toBeNull();
+    }
+
+    expect(wallOnNextTick(game, player, x, y + 4)).toMatch(/allows 4 walls/);
+    expect(game.status(player)).toMatchObject({ walls: 4, wallCap: 4 });
+  });
+
+  it("stops cells from being placed on a wall", () => {
+    const game = newGame();
+    const player = joined(game, 1);
+    const { x, y } = player.mat!;
+    wallOnNextTick(game, player, x, y);
+
+    expect(placeOnNextTick(game, player, [[x, y]])).toMatch(/walls/);
+    expect(cellAt(game, x, y)).toBe(DEAD);
+  });
+
+  it("lets players remove only their own walls", () => {
+    const game = newGame();
+    const first = joined(game, 1);
+    const second = joined(game, 2);
+    const { x, y } = first.mat!;
+    wallOnNextTick(game, first, x, y);
+
+    expect(wallOnNextTick(game, second, x, y, true)).toMatch(/own walls/);
+    expect(wallOnNextTick(game, first, x, y, true)).toBeNull();
+    expect(game.walls()).toEqual([]);
+    expect(placeOnNextTick(game, first, [[x, y]])).toBeNull();
+  });
+
+  it("removes walls left outside a shrunk mat and keeps the rest", () => {
+    const game = newGame();
+    const player = joined(game, 1);
+    player.smoothedLive = 90;
+    game.tick();
+    const big = player.mat!;
+    expect(big.w).toBe(15);
+    wallOnNextTick(game, player, big.x, big.y);
+    wallOnNextTick(game, player, player.home!.x, player.home!.y);
+
+    player.smoothedLive = 0;
+    player.recentLive.length = 0;
+    game.tick();
+    expect(player.mat!.w).toBe(8);
+    expect(game.walls()).toEqual([{ id: 1, ...player.home! }]);
+  });
+
+  it("removes a freed account's walls", () => {
+    const game = newGame();
+    const player = joined(game, 1);
+    wallOnNextTick(game, player, player.home!.x, player.home!.y);
+
+    game.free(player);
+    expect(player.walls.size).toBe(0);
+    expect(game.walls()).toEqual([]);
   });
 });
 

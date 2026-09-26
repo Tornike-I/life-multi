@@ -53,7 +53,12 @@ function birthColor(
   return pick === 0 ? a : pick === 1 ? b : c;
 }
 
-export function step(board: Board, generation: number, seed = 0): Board {
+export function step(
+  board: Board,
+  generation: number,
+  seed = 0,
+  walls?: Uint8Array,
+): Board {
   const { width, height, cells } = board;
   const next = new Uint16Array(cells.length);
   const neighbors = new Int32Array(8);
@@ -90,6 +95,7 @@ export function step(board: Board, generation: number, seed = 0): Board {
       }
 
       const i = row + x;
+      if (walls?.[i]) continue;
       if (cells[i] !== DEAD) {
         if (count === 2 || count === 3) next[i] = cells[i];
       } else if (count === 3) {

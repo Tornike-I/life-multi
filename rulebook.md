@@ -7,8 +7,8 @@ How everything in life-multi interacts, including every formula the server uses.
 The world advances in **ticks**, one every `TICK_MS` = 100 ms (10 ticks per second). Each tick runs these steps in order:
 
 1. **Step** the board one generation (§3, §4).
-2. **Apply placements and removals** that arrived since the last tick, in arrival order (§8).
-3. **Update players**: live cell counts, smoothing, mat growth and shrinking, and inventory accrual (§5–§7, §9).
+2. **Apply placements, removals and wall changes** that arrived since the last tick, in arrival order (§8, §13).
+3. **Update players**: live cell counts, smoothing, mat growth and shrinking, walls left outside a shrunk mat, and inventory accrual (§5–§7, §9, §13).
 4. **Broadcast** the new state to every connected client.
 
 `t` below is the board's generation number. Stepping turns generation `t` into generation `t + 1`.
@@ -17,7 +17,7 @@ The world advances in **ticks**, one every `TICK_MS` = 100 ms (10 ticks per seco
 
 - `BOARD_SIZE` × `BOARD_SIZE` = 512 × 512 squares.
 - The board is a **torus**: the right edge neighbors the left edge and the top neighbors the bottom. This applies to cells and to mats.
-- Each square is either **dead** or **alive with a color**. A color is a player's account id (1 to 65 535).
+- Each square is either **dead** or **alive with a color**. A color is a player's account id (1 to 65 535). A dead square may also hold a **wall** (§13).
 - The board starts empty.
 
 ## 3. Life
@@ -31,6 +31,8 @@ For a square `p`, let `N(p)` be the number of live squares among its 8 neighbors
 | any       | otherwise    | dead            |
 
 This is Conway's B3/S23. Color never affects whether a square lives or dies.
+
+A square with a wall (§13) is never born, so it stays dead and never counts toward any neighbor's `N`.
 
 ## 4. Color
 
@@ -101,7 +103,7 @@ A group is applied at step 2 of the next tick, after the board has stepped, and 
 1. The player has a mat.
 2. Every square is inside the player's own mat (§9).
 3. `1 ≤ n ≤ floor(I)`, where `n` is the number of distinct squares.
-4. Every square is dead.
+4. Every square is dead and has no wall.
 
 If accepted, every square becomes alive in the player's color and `I` drops by `n`. Otherwise **nothing** is placed, nothing is spent, and the player is told why.
 
@@ -145,7 +147,7 @@ At step 3 of every tick, players are updated in order of account id. For a mat o
 
 - If `s*_p < s`, the mat **shrinks** to side `s*_p` at once.
 - If `s*_p > s`, the mat **grows** one square at a time toward `s*_p`, stopping before the first size that would break the gap rule with another mat. Its side never exceeds `BOARD_SIZE`. A blocked mat keeps its allowance and grows as soon as there's room.
-- Shrinking never removes cells; only the area where the owner can place changes.
+- Shrinking never removes cells; only the area where the owner can place changes. It does remove the owner's walls that end up outside the mat (§13).
 
 **Indicator:** the mat ring shows the progress from the current side toward the next one, using the unfloored allowance so it moves smoothly:
 
@@ -161,7 +163,7 @@ The ring turns amber while the mat is blocked, meaning `s*_p > s` after this tic
 - An account's id is its color and never changes.
 - Mats, inventory and colors are kept forever, including while the player is offline.
 - **Names:** an account may set a display name at any time, as often as it likes. Names are not unique; the player's id and color are what identify them. The server takes the name it is given, removes zero-width and bidirectional characters, turns every other run of whitespace or control characters into one space, and trims it. What is left has to be 1 to `MAX_PLAYER_NAME_LENGTH` = 20 code points, or the rename is rejected. An account with no name shows as `player <id>`.
-- **Admin free:** an admin can release an account's mat (`npm run admin -- free <id>`). The mat and home square are removed, cells already on the board stay, and the account keeps its color and inventory. Joining again gives a new spot (§9).
+- **Admin free:** an admin can release an account's mat (`npm run admin -- free <id>`). The mat, home square and the account's walls are removed, cells already on the board stay, and the account keeps its color and inventory. Joining again gives a new spot (§9).
 
 ## 11. View
 
@@ -169,7 +171,7 @@ What a player's screen may show. For now the client applies these limits; the se
 
 - **Camera:** it can be moved anywhere. The board is a torus, so panning past an edge shows the other side again.
 - **Zoom** is measured in squares across the longer side of the board view. It ranges from `MAX_VIEW_SQUARES` = 128 (most zoomed out) to `MIN_VIEW_SQUARES` = 12 (most zoomed in). The camera starts at `DEFAULT_VIEW_SQUARES` = 48 centered on the board, and jumps to the player's mat when they get one. On touch screens it uses `TOUCH_VIEW_SQUARES` = 24 instead, so squares are big enough to tap.
-- **Minimap:** it covers the player's own territory: the smallest rectangle on the torus that contains their mat and every live cell of their color. It's measured over the last `MINIMAP_HISTORY_TICKS` = 50 board updates the player's client received (5 s): a square counts if it held the mat or one of their cells in any of them. Something oscillating at the edge therefore can't make the minimap grow and shrink, and after a real loss it shrinks once those squares have been empty for the whole window. Columns and rows are measured separately, each span being everything outside the longest run of columns (rows) with none of those squares. Each span is padded by `MINIMAP_PADDING` = 16 squares on both sides and widened to at least `MINIMAP_MIN_SQUARES` = 64, but never beyond the board. Inside that area the minimap shows every live cell in its owner's color, including other players' cells, plus the player's mat and the camera's view. Clicking it moves the camera there.
+- **Minimap:** it covers the player's own territory: the smallest rectangle on the torus that contains their mat and every live cell of their color. It's measured over the last `MINIMAP_HISTORY_TICKS` = 50 board updates the player's client received (5 s): a square counts if it held the mat or one of their cells in any of them. Something oscillating at the edge therefore can't make the minimap grow and shrink, and after a real loss it shrinks once those squares have been empty for the whole window. Columns and rows are measured separately, each span being everything outside the longest run of columns (rows) with none of those squares. Each span is padded by `MINIMAP_PADDING` = 16 squares on both sides and widened to at least `MINIMAP_MIN_SQUARES` = 64, but never beyond the board. Inside that area the minimap shows every live cell in its owner's color, including other players' cells, plus every wall in gray, the player's mat and the camera's view. Clicking it moves the camera there.
 
 ## 12. Leaderboard
 
@@ -179,6 +181,29 @@ Every `LEADERBOARD_MS` = 2000 ms the server ranks players and sends each client 
 - Ranking is by live cells (§5), highest first, breaking ties by account id so the order is stable. Tied players **share a rank**, and the next rank after a tie skips the places the tie used: 1, 2, 2, 4.
 - Live cells here are the raw count from this tick, not the smoothed value used for allowances (§6), so the order moves as patterns grow and collapse.
 - Each client also receives its own rank and the number of ranked players, whether or not it made the top 10.
+
+## 13. Walls
+
+A wall is a square on its owner's mat that no cell can be alive on (§3).
+
+```
+Wall limit   W_p = floor( s / WALL_SIDE_DIVISOR ) = floor(s / 2)      s = current mat side, 0 without a mat
+```
+
+| Mat side `s` | Wall limit `W` |
+| ------------ | -------------- |
+| 8            | 4              |
+| 9            | 4              |
+| 12           | 6              |
+| 19           | 9              |
+| 36           | 18             |
+
+- Walls are not spent: a player may have up to `W` walls on the board at once, and removing one frees its slot. They are not cells, so they don't count toward `L` (§5).
+- Walls are placed and removed one square at a time. Like placements, each change is applied at step 2 of the next tick, in arrival order with placements.
+- **Placing** a wall is accepted only if the player has a mat, the square is inside it, the square is dead and has no wall, and the player has fewer than `W` walls. Otherwise nothing changes and the player is told why.
+- **Removing:** a player may remove any of their own walls, and only their own.
+- **Shrinking:** when the mat shrinks (§9), the owner's walls outside the new mat are removed. If the walls left over still exceed the new `W`, they stay, but no new wall can be placed until the count is below `W`.
+- **Shape matters:** a straight horizontal or vertical line of walls fully separates the two sides, because cells two squares apart are never neighbors and nothing can be born on the line. A diagonal line doesn't: the squares on either side of it touch at the corners.
 
 ## Constants
 
@@ -208,3 +233,4 @@ Every `LEADERBOARD_MS` = 2000 ms the server ranks players and sends each client 
 | `MAX_PLAYER_NAME_LENGTH`      | 20      | §10     |
 | `LEADERBOARD_SIZE`            | 10      | §12     |
 | `LEADERBOARD_MS`              | 2000 ms | §12     |
+| `WALL_SIDE_DIVISOR`           | 2       | §13     |

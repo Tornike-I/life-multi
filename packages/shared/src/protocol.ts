@@ -16,6 +16,10 @@ export interface MatInfo extends Rect {
   id: number;
 }
 
+export interface WallInfo extends Point {
+  id: number;
+}
+
 export interface PlayerStatus {
   id: number;
   name: string | null;
@@ -25,6 +29,8 @@ export interface PlayerStatus {
   matProgress: number;
   matBlocked: boolean;
   liveCells: number;
+  walls: number;
+  wallCap: number;
   home: Point | null;
   mat: Rect | null;
 }
@@ -50,6 +56,7 @@ export interface StateMessage {
   width: number;
   height: number;
   mats: MatInfo[];
+  walls: WallInfo[];
   you: PlayerStatus | null;
 }
 
@@ -62,7 +69,7 @@ export interface LeaderboardMessage {
 
 export interface ResultMessage {
   type: "result";
-  action: "join" | "place" | "removeCells" | "name";
+  action: "join" | "place" | "removeCells" | "wall" | "name";
   ok: boolean;
   reason?: string;
 }
@@ -88,13 +95,23 @@ export interface RemoveCellsMessage {
   type: "removeCells";
 }
 
+export interface WallMessage extends Point {
+  type: "wall";
+  remove: boolean;
+}
+
 export interface NameMessage {
   type: "name";
   name: string;
 }
 
 export type ClientMessage =
-  HelloMessage | JoinMessage | PlaceMessage | RemoveCellsMessage | NameMessage;
+  | HelloMessage
+  | JoinMessage
+  | PlaceMessage
+  | RemoveCellsMessage
+  | WallMessage
+  | NameMessage;
 
 export function sanitizePlayerName(raw: string): string | null {
   const cleaned = raw.replace(INVISIBLE, "").replace(BLANK, " ").trim();
@@ -121,6 +138,8 @@ export function parseClientMessage(raw: string): ClientMessage | null {
       return parsePlace(message.cells);
     case "removeCells":
       return { type: "removeCells" };
+    case "wall":
+      return parseWall(message);
     case "name":
       return parseName(message.name);
     default:
@@ -146,6 +165,13 @@ function parsePlace(cells: unknown): PlaceMessage | null {
       Number.isInteger(cell[1]),
   );
   return valid ? { type: "place", cells } : null;
+}
+
+function parseWall(message: Record<string, unknown>): WallMessage | null {
+  const { x, y, remove } = message;
+  if (!Number.isInteger(x) || !Number.isInteger(y)) return null;
+  if (typeof remove !== "boolean") return null;
+  return { type: "wall", x: x as number, y: y as number, remove };
 }
 
 // Passes the name through unsanitized so the server can tell the player why a

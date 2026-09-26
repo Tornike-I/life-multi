@@ -9,7 +9,7 @@ import {
   type StateMessage,
 } from "@life-multi/shared";
 import { type Camera, mod, type Viewport } from "./camera.ts";
-import { colorFor } from "./render.ts";
+import { colorFor, WALL } from "./render.ts";
 
 export interface MinimapLayout {
   extent: Rect;
@@ -98,6 +98,15 @@ export function drawMinimap(
       }
       ctx.fillRect(toX(x), toY(y), dot, dot);
     }
+  }
+
+  ctx.fillStyle = WALL;
+  for (const wall of state.walls) {
+    const x = nearestCopy(wall.x, centerX, width);
+    const y = nearestCopy(wall.y, centerY, height);
+    if (x < extent.x || x >= extent.x + extent.w) continue;
+    if (y < extent.y || y >= extent.y + extent.h) continue;
+    ctx.fillRect(toX(x), toY(y), dot, dot);
   }
 
   const halfWidth = viewport.width / 2 / camera.zoom;

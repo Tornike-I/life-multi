@@ -7,6 +7,7 @@ import {
   matSideFor,
   recordLive,
   smoothLive,
+  wallCapFor,
 } from "./rules.ts";
 
 describe("matSideFor", () => {
@@ -76,5 +77,16 @@ describe("live cell smoothing", () => {
       recordLive(recent, tick);
     }
     expect(recent).toHaveLength(LIVE_PEAK_TICKS);
+  });
+});
+
+describe("wallCapFor", () => {
+  it.each([
+    [0, 0],
+    [8, 4],
+    [9, 4],
+    [36, 18],
+  ])("gives a mat side of %s a limit of %s walls", (side, cap) => {
+    expect(wallCapFor(side)).toBe(cap);
   });
 });

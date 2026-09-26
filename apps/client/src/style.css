@@ -40,7 +40,8 @@ header,
 #generation,
 #inventory,
 #mat-size,
-#alive {
+#alive,
+#walls {
   display: inline-block;
   text-align: left;
 }
@@ -63,6 +64,14 @@ header,
 
 #place {
   min-width: 9ch;
+}
+
+#walls {
+  min-width: 10ch;
+}
+
+#wall-mode[aria-pressed="true"] {
+  border-color: var(--player);
 }
 
 .stage {
