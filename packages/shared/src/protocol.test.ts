@@ -22,6 +22,7 @@ describe("parseClientMessage", () => {
         ],
       },
     ],
+    ['{"type":"removeCells"}', { type: "removeCells" }],
     ['{"type":"name","name":"Ada"}', { type: "name", name: "Ada" }],
     ['{"type":"name","name":"  "}', { type: "name", name: "  " }],
   ])("accepts %s", (raw, expected) => {

@@ -57,6 +57,31 @@ function cellAt(game: Game, x: number, y: number): number {
   return game.board.cells[y * game.board.width + x];
 }
 
+function putBlock(game: Game, x: number, y: number, color: number): void {
+  const { width, height, cells } = game.board;
+  for (const [dx, dy] of [
+    [0, 0],
+    [1, 0],
+    [0, 1],
+    [1, 1],
+  ]) {
+    cells[((y + dy + height) % height) * width + ((x + dx + width) % width)] =
+      color;
+  }
+}
+
+function removeOnNextTick(
+  game: Game,
+  account: Account,
+): string | null | undefined {
+  let outcome: string | null | undefined;
+  game.queueRemoveCells(account, (reason) => {
+    outcome = reason;
+  });
+  game.tick();
+  return outcome;
+}
+
 describe("placement", () => {
   it("places a group on empty squares of the player's mat and spends inventory", () => {
     const game = newGame();
@@ -139,6 +164,61 @@ describe("placement", () => {
     expect(cellAt(game, 62, 0)).toBe(1);
     expect(cellAt(game, 62, 1)).toBe(1);
     expect(cellAt(game, 3, 3)).toBe(1);
+  });
+});
+
+describe("removing cells", () => {
+  it("removes only the player's own cells inside their mat", () => {
+    const game = newGame();
+    const player = joined(game, 1);
+    const { x, y } = player.mat!;
+    putBlock(game, x, y, 1);
+    putBlock(game, x + 4, y + 4, 2);
+    putBlock(game, x - 4, y - 4, 1);
+
+    expect(removeOnNextTick(game, player)).toBeNull();
+    expect(cellAt(game, x, y)).toBe(DEAD);
+    expect(cellAt(game, x + 1, y + 1)).toBe(DEAD);
+    expect(cellAt(game, x + 4, y + 4)).toBe(2);
+    expect(cellAt(game, x - 4, y - 4)).toBe(1);
+  });
+
+  it("does not refund inventory", () => {
+    const game = newGame();
+    const player = joined(game, 1);
+    const { x, y } = player.mat!;
+    putBlock(game, x, y, 1);
+    player.inventory = 5;
+
+    removeOnNextTick(game, player);
+    expect(player.inventory).toBeCloseTo(5 + TICK_MS / ACCRUAL_MS);
+  });
+
+  it("removes cells on a mat that wraps across the board edge", () => {
+    const game = newGame();
+    const player = joined(game, 1);
+    player.home = { x: 1, y: 1 };
+    player.mat = squareMat(player.home, 8, SIZE, SIZE);
+    putBlock(game, 63, 63, 1);
+
+    expect(removeOnNextTick(game, player)).toBeNull();
+    for (const [cx, cy] of [
+      [63, 63],
+      [0, 63],
+      [63, 0],
+      [0, 0],
+    ]) {
+      expect(cellAt(game, cx, cy)).toBe(DEAD);
+    }
+  });
+
+  it("refuses when the player has no mat", () => {
+    const game = newGame();
+    const player = newAccount(game, 1);
+    putBlock(game, 10, 10, 1);
+
+    expect(removeOnNextTick(game, player)).toMatch(/mat/);
+    expect(cellAt(game, 10, 10)).toBe(1);
   });
 });
 

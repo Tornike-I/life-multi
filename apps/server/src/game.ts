@@ -42,13 +42,16 @@ export interface Ranking {
   ranks: Map<number, number>;
 }
 
-type PlacementDone = (reason: string | null) => void;
+type ActionDone = (reason: string | null) => void;
 
-interface Placement {
-  account: Account;
-  cells: [number, number][];
-  done: PlacementDone;
-}
+type Action =
+  | {
+      kind: "place";
+      account: Account;
+      cells: [number, number][];
+      done: ActionDone;
+    }
+  | { kind: "removeCells"; account: Account; done: ActionDone };
 
 const NO_MAT = "You don't have a mat yet.";
 
@@ -58,7 +61,7 @@ export class Game {
   readonly seed: number;
   private readonly byId = new Map<number, Account>();
   private readonly byKeyHash = new Map<string, Account>();
-  private placements: Placement[] = [];
+  private actions: Action[] = [];
   private readonly liveCounts = new Uint32Array(65536);
 
   constructor(board: Board, generation: number, seed: number) {
@@ -142,19 +145,27 @@ export class Game {
   queuePlacement(
     account: Account,
     cells: [number, number][],
-    done: PlacementDone,
+    done: ActionDone,
   ): void {
-    this.placements.push({ account, cells, done });
+    this.actions.push({ kind: "place", account, cells, done });
+  }
+
+  queueRemoveCells(account: Account, done: ActionDone): void {
+    this.actions.push({ kind: "removeCells", account, done });
   }
 
   tick(): void {
     this.board = step(this.board, this.generation, this.seed);
     this.generation++;
 
-    const placements = this.placements;
-    this.placements = [];
-    for (const { account, cells, done } of placements) {
-      done(this.place(account, cells));
+    const actions = this.actions;
+    this.actions = [];
+    for (const action of actions) {
+      action.done(
+        action.kind === "place"
+          ? this.place(action.account, action.cells)
+          : this.removeCells(action.account),
+      );
     }
 
     this.updateAccounts();
@@ -217,6 +228,20 @@ export class Game {
 
     for (const index of squares) this.board.cells[index] = account.id;
     account.inventory -= squares.size;
+    return null;
+  }
+
+  private removeCells(account: Account): string | null {
+    const { mat } = account;
+    if (!mat) return NO_MAT;
+    const { width, height, cells } = this.board;
+    for (let dy = 0; dy < mat.h; dy++) {
+      const row = mod(mat.y + dy, height) * width;
+      for (let dx = 0; dx < mat.w; dx++) {
+        const index = row + mod(mat.x + dx, width);
+        if (cells[index] === account.id) cells[index] = DEAD;
+      }
+    }
     return null;
   }
 
