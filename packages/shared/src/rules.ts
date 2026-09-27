@@ -21,7 +21,7 @@ export const LIVE_PEAK_TICKS = 30;
 export const LEADERBOARD_SIZE = 10;
 export const LEADERBOARD_MS = 2000;
 
-export const MAX_VIEW_SQUARES = 128;
+export const MAX_VIEW_SQUARES = BOARD_SIZE;
 export const DEFAULT_VIEW_SQUARES = 48;
 export const TOUCH_VIEW_SQUARES = 24;
 export const MIN_VIEW_SQUARES = 12;
