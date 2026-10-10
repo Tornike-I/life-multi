@@ -10,9 +10,9 @@
   },
   "dependencies": {
     "@life-multi/shared": "*",
-    "ws": "8.21.3"
+    "ws": "8.22.0"
   },
   "devDependencies": {
-    "@types/ws": "8.18.1"
+    "@types/ws": "8.18.2"
   }
 }
